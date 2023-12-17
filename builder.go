@@ -9,6 +9,7 @@ import (
  * sql sqlBuilder
 **/
 
+// where条件
 type Wh struct {
 	// 字段
 	Field string
@@ -80,7 +81,7 @@ func (b *sqlBuilder) Select(fields ...string) *sqlBuilder {
 	return b
 }
 
-// limit
+// limit分页
 func (b *sqlBuilder) Limit(p, num int) *sqlBuilder {
 	b.offset = (p - 1) * num
 	b.pageSize = num

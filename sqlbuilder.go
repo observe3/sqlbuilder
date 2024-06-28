@@ -5,25 +5,6 @@ import (
 	"strings"
 )
 
-// 条件结构体
-type Wh struct {
-
-	// 字段
-	Field string
-
-	// 条件
-	Condition string
-
-	// 值
-	Value interface{}
-
-	// 表
-	TableName string
-
-	// 关系
-	Relation string
-}
-
 // sqlBuilder
 type sqlBuilder struct {
 	// 表名
@@ -38,8 +19,8 @@ type sqlBuilder struct {
 	// 参数的值
 	fieldValue []interface{}
 
-	// 查询条件
-	whereMap []map[string][]Wh
+	// where条件
+	jwhere *Where
 
 	// 排序
 	orderField [][]interface{}
@@ -50,11 +31,15 @@ type sqlBuilder struct {
 	// sql 语句
 	SqlStr string
 
+	// 子查询
 	childQuery string
 
+	// 是否去重
+	distinct bool
+
 	// 分页参数
-	offset   int
-	pageSize int
+	offset   int64
+	pageSize int64
 
 	// 是否打印sql
 	debugSql bool
@@ -67,11 +52,16 @@ func From(tableName string, args ...interface{}) *sqlBuilder {
 	builder := &sqlBuilder{
 		tableName: tableName,
 		alias:     tableName,
-		whereMap:  make([]map[string][]Wh, 0),
+		jwhere: &Where{
+			tableName:     tableName,
+			alias:         tableName,
+			groupWhere:    make([]GroupWhere, 0),
+			assembleWhere: make([][]GroupWhere, 0),
+		},
 	}
 	if len(args) > 0 {
 		if val, ok := args[0].(*sqlBuilder); ok {
-			childQuery, data := val.Build()
+			childQuery, data := val.BuildSelect()
 			data = append(data, builder.fieldValue...)
 			builder.fieldValue = data
 			builder.childQuery = childQuery
@@ -85,6 +75,7 @@ func From(tableName string, args ...interface{}) *sqlBuilder {
  **/
 func (b *sqlBuilder) Table(tableName string) *sqlBuilder {
 	b.tableName = tableName
+	b.jwhere.SetTableName(tableName)
 	return b
 }
 
@@ -103,7 +94,7 @@ func (b *sqlBuilder) Select(fields ...interface{}) *sqlBuilder {
 }
 
 // limit
-func (b *sqlBuilder) Limit(p, num int) *sqlBuilder {
+func (b *sqlBuilder) Limit(p, num int64) *sqlBuilder {
 	b.offset = (p - 1) * num
 	b.pageSize = num
 	return b
@@ -112,6 +103,12 @@ func (b *sqlBuilder) Limit(p, num int) *sqlBuilder {
 // 排序
 func (b *sqlBuilder) Order(order [][]interface{}) *sqlBuilder {
 	b.orderField = order
+	return b
+}
+
+// 去重
+func (b *sqlBuilder) Distinct() *sqlBuilder {
+	b.distinct = true
 	return b
 }
 
@@ -127,11 +124,17 @@ func (b *sqlBuilder) Order(order [][]interface{}) *sqlBuilder {
     {"age", "=", 18},
     {"age", 18},
     })
+  - WhereAnd([][][]interface{}{
+    [][]interface{}{
+    []interface{}{"sex", "=", "男", "user", "or"}
+    },
+    [][]interface{}{},
+    })
 
 *
 */
 func (b *sqlBuilder) WhereAnd(args ...interface{}) *sqlBuilder {
-	b.Where("and", args...)
+	b.where("and", args...)
 	return b
 }
 
@@ -151,7 +154,7 @@ func (b *sqlBuilder) WhereAnd(args ...interface{}) *sqlBuilder {
 *
 */
 func (b *sqlBuilder) WhereOr(args ...interface{}) *sqlBuilder {
-	b.Where("or", args...)
+	b.where("or", args...)
 	return b
 }
 
@@ -171,218 +174,22 @@ func (b *sqlBuilder) WhereOr(args ...interface{}) *sqlBuilder {
 
 *
 */
-func (b *sqlBuilder) Where(relation string, args ...interface{}) *sqlBuilder {
-	length := len(args)
-	if length == 4 {
-		b.whereMap = append(b.whereMap, map[string][]Wh{
-			relation: {
-				{
-					Field:     args[0].(string),
-					Condition: args[1].(string),
-					Value:     args[2],
-					TableName: args[3].(string),
-				},
-			},
-		})
-	} else if length == 3 {
-		b.whereMap = append(b.whereMap, map[string][]Wh{
-			relation: {
-				{
-					Field:     args[0].(string),
-					Condition: args[1].(string),
-					Value:     args[2],
-				},
-			},
-		})
-	} else if length == 2 {
-		b.whereMap = append(b.whereMap, map[string][]Wh{
-			relation: {
-				{
-					Field:     args[0].(string),
-					Condition: "=",
-					Value:     args[1],
-				},
-			},
-		})
-	} else if length == 1 {
-		whs, ok := args[0].([][]interface{})
-		if ok {
-			andWh := []Wh{}
-			for _, v := range whs {
-				switch len(v) {
-				case 5:
-					andWh = append(andWh, Wh{
-						Field:     v[0].(string),
-						Condition: v[1].(string),
-						Value:     v[2],
-						TableName: v[3].(string),
-						Relation:  v[4].(string),
-					})
-				case 4:
-					andWh = append(andWh, Wh{
-						Field:     v[0].(string),
-						Condition: v[1].(string),
-						Value:     v[2],
-						TableName: v[3].(string),
-					})
-				case 3:
-					andWh = append(andWh, Wh{
-						Field:     v[0].(string),
-						Condition: v[1].(string),
-						Value:     v[2],
-					})
-				case 2:
-					andWh = append(andWh, Wh{
-						Field:     v[0].(string),
-						Condition: "=",
-						Value:     v[1],
-					})
-				}
-			}
-			b.whereMap = append(b.whereMap, map[string][]Wh{
-				relation: andWh,
-			})
+func (b *sqlBuilder) where(relation string, args ...interface{}) *sqlBuilder {
+	if len(args) > 1 {
+		if val, ok := args[0].(string); !ok || val == "" {
+			panic("args[0] 必须是一个字符串并且不能为空")
 		}
 	}
+	groupWhere := ArgsMap[len(args)].ParseArgs(relation, args...)
+	b.jwhere.assembleWhere = append(b.jwhere.assembleWhere, groupWhere)
 	return b
 }
 
-/**
- * 构建sql
-**/
-func (b *sqlBuilder) Build() (string, []interface{}) {
-	if b.alias == "" {
-		b.alias = b.tableName
-	}
-
-	var fields string
-	// 拼接要查询的字段
-	for k, v := range b.fields {
-		if val, ok := v.(*sqlBuilder); ok {
-			if len(val.fields) == 0 {
-				// 没有查询字段
-				panic("no query field")
-			}
-			field, data := val.Build()
-			data = append(data, b.fieldValue...)
-			b.fieldValue = data
-			fstr := val.fields[0].(string)
-			if strings.Contains(fstr, ".") {
-				fstr = strings.Split(fstr, ".")[1]
-			}
-			b.fields[k] = fmt.Sprintf("(%s) as %s", field, fstr)
-		}
-		if val, ok := v.(string); ok {
-			b.fields[k] = fmt.Sprintf("`%s`.`%s`", b.alias, val)
-		}
-		if fields != "" {
-			fields = fmt.Sprintf("%s,%s", fields, b.fields[k])
-		} else {
-			fields = fmt.Sprintf("%s", b.fields[k])
-		}
-	}
-	// 没有指定字段，则默认查询所有
-	if fields == "" {
-		fields = fmt.Sprintf("`%s`.*", b.alias)
-	}
-	target := fmt.Sprintf("`%s`", b.tableName)
-	if b.childQuery != "" {
-		target = fmt.Sprintf("(%s)", b.childQuery)
-	}
-	b.SqlStr = fmt.Sprintf("select %s from %s as `%s`", fields, target, b.alias)
-	// 连表
-	for _, v := range b.joins {
-		b.SqlStr = fmt.Sprintf("%s %s", b.SqlStr, v)
-	}
-	b.SqlStr = fmt.Sprintf("%s where 1 = 1", b.SqlStr)
-	if len(b.whereMap) > 0 {
-		for _, v := range b.whereMap {
-			// 判断是and 还是 or
-			for key, vv := range v {
-				if key != "and" && key != "or" {
-					continue
-				}
-				// 遍历and 条件
-				var wh string
-				if len(vv) == 1 {
-					wh = fmt.Sprintf(" %s ", key)
-				} else if len(vv) > 1 {
-					wh = fmt.Sprintf(" %s (", key)
-				}
-				for k, w := range vv {
-					if k > 0 {
-						relation := "and"
-						if w.Relation != "" {
-							relation = w.Relation
-						}
-						wh += fmt.Sprintf(" %s ", relation)
-					}
-					tableName := b.tableName
-					if b.alias != "" {
-						tableName = b.alias
-					}
-					if w.TableName != "" {
-						tableName = w.TableName
-					}
-
-					condition, value := fvalue(w.Condition)
-					if sval, ok := w.Value.([]interface{}); ok {
-						if strings.Contains(condition, "in") {
-							var valStr string
-							for _, v := range sval {
-								valStr += fmt.Sprintf("%v,", v)
-							}
-							valStr = strings.TrimRight(valStr, ",")
-							b.fieldValue = append(b.fieldValue, valStr)
-						} else if strings.Contains(condition, "between") {
-							if len(sval) == 2 {
-								b.fieldValue = append(b.fieldValue, sval...)
-							}
-						}
-					} else if builder, ok := w.Value.(*sqlBuilder); ok {
-						buildQuery, args := builder.Build()
-						b.fieldValue = append(b.fieldValue, args...)
-						value = fmt.Sprintf("(%v)", buildQuery)
-					} else {
-						if w.Value != "" {
-							b.fieldValue = append(b.fieldValue, w.Value)
-						}
-					}
-					wh = fmt.Sprintf("%s`%s`.`%s` %s %s", wh, tableName, w.Field, condition, value)
-				}
-				if len(vv) > 1 {
-					wh += ")"
-				}
-				b.SqlStr += wh
-			}
-
-		}
-	}
-	// 排序
-	if len(b.orderField) > 0 {
-		b.SqlStr += " order by "
-		var order string
-		for _, v := range b.orderField {
-			if len(v) < 2 {
-				continue
-			}
-			order = fmt.Sprintf("%s,`%s`.`%s` %s", order, b.alias, v[0], v[1])
-		}
-		order = strings.Trim(order, ",")
-		b.SqlStr += order
-	}
-	// 分页
-	if b.offset >= 0 && b.pageSize > 0 {
-		b.SqlStr = fmt.Sprintf("%s limit %d,%d", b.SqlStr, b.offset, b.pageSize)
-	}
-	if b.offset < 0 && b.pageSize > 0 {
-		b.SqlStr = fmt.Sprintf("%s limit %d", b.SqlStr, b.pageSize)
-	}
-	// 是否打印sql
-	if b.debugSql {
-		fmt.Println(b.SqlStr)
-	}
-	return b.SqlStr, b.fieldValue
+// 返回where条件和参数
+func (b *sqlBuilder) ToString() string {
+	sqlStr, args := b.jwhere.ParseWhere()
+	b.fieldValue = append(b.fieldValue, args...)
+	return sqlStr
 }
 
 // 获取字段值
@@ -393,6 +200,7 @@ func (b *sqlBuilder) GetFieldValue() []interface{} {
 // 给表起别名
 func (b *sqlBuilder) As(name string) *sqlBuilder {
 	b.alias = name
+	b.jwhere.SetAlias(name)
 	return b
 }
 
@@ -436,55 +244,184 @@ func (b *sqlBuilder) buildJoin(jt string, tableName string, alias string, f1, f2
 	return fmt.Sprintf("%s `%s` as `%s` on `%s`.`%s` = `%s`.`%s`", joinStr, tableName, alias, b.alias, f1, alias, f2)
 }
 
-func fvalue(c string) (string, string) {
-	var condition, value string
-	c = strings.ToLower(c)
-	switch c {
-	case "like", "not like":
-		value = "CONCAT('%',?,'%')"
-		condition = c
-	case "start with", "not start with":
-		value = "CONCAT(?,'%')"
-		if c == "start with" {
-			condition = "like"
-		} else if c == "not start with" {
-			condition = "not like"
-		}
-	case "end with", "not end with":
-		value = "CONCAT('%',?)"
-		if c == "end with" {
-			condition = "like"
-		} else if c == "not end with" {
-			condition = "not like"
-		}
-	case "=", "<>", "!=", ">", ">=", "<", "<=":
-		value = "?"
-		condition = c
-	case "in",
-		"not in":
-		value = "CONCAT('(',?,')')"
-		condition = c
-	case "is null":
-		value = ""
-		condition = "is null"
-	case "is not null":
-		value = ""
-		condition = "is not null"
-	case "is empty":
-		value = ""
-		condition = "= ''"
-	case "is not empty":
-		value = ""
-		condition = "<> ''"
-	case "between":
-		value = "and ?"
-		condition = "between ?"
-	case "not between":
-		value = "and ?"
-		condition = "not between ?"
-	default:
-		value = "?"
-		condition = c
+/**
+ * 构建查询sql
+**/
+func (b *sqlBuilder) BuildSelect() (string, []interface{}) {
+	if b.alias == "" {
+		b.alias = b.tableName
+		b.jwhere.SetAlias(b.tableName)
 	}
-	return condition, value
+
+	var fields string
+	// 拼接要查询的字段
+	for _, v := range b.fields {
+		var nfield string
+		switch val := v.(type) {
+		case *sqlBuilder:
+			if len(val.fields) == 0 || len(val.fields) > 1 {
+				panic("仅需要一个字段")
+			}
+			childQuery, data := val.BuildSelect()
+			data = append(data, b.fieldValue...)
+			b.fieldValue = data
+			fstr := val.fields[0].(string)
+			if strings.Contains(fstr, ".") {
+				fstr = strings.Split(fstr, ".")[1]
+			}
+			nfield = fmt.Sprintf("(%s) as `%s`", childQuery, fstr)
+		case *fcolumn:
+			if val.Fn != "" {
+				var fnp string
+				for _, vv := range val.Params {
+					fnp = fmt.Sprintf("%s, %v", fnp, vv)
+				}
+				fnp = strings.TrimLeft(fnp, ", ")
+				nfield = fmt.Sprintf("%s(%s) as `%s`", val.Fn, fnp, val.Alias)
+			}
+		case *scolumn:
+			if val.TableAlias != "" {
+				nfield = fmt.Sprintf("`%s`.`%s` %s", val.TableAlias, val.Field, val.FieldAlias)
+				nfield = strings.TrimSpace(nfield)
+			}
+		case string:
+			if strings.Contains(val, ".") {
+				arr := strings.Split(val, ".")
+				if len(arr) != 2 {
+					panic("错误的查询字段")
+				}
+				nfield = fmt.Sprintf("`%s`.`%s`", arr[0], arr[1])
+			} else {
+				nfield = fmt.Sprintf("`%s`.`%s`", b.alias, val)
+			}
+		default:
+			panic("不支持的查询字段")
+		}
+		if fields != "" {
+			fields = fmt.Sprintf("%s,%s", fields, nfield)
+		} else {
+			fields = nfield
+		}
+	}
+	// 没有指定字段，则默认查询所有
+	if fields == "" {
+		fields = fmt.Sprintf("`%s`.*", b.alias)
+	}
+	target := fmt.Sprintf("`%s`", b.tableName)
+	if b.childQuery != "" {
+		target = fmt.Sprintf("(%s)", b.childQuery)
+	}
+	// 判断是否去重
+	if b.distinct {
+		b.SqlStr = fmt.Sprintf("select distinct %s from %s as `%s`", fields, target, b.alias)
+	} else {
+		b.SqlStr = fmt.Sprintf("select %s from %s as `%s`", fields, target, b.alias)
+	}
+	// 连表
+	for _, v := range b.joins {
+		b.SqlStr = fmt.Sprintf("%s %s", b.SqlStr, v)
+	}
+	// 分组条件
+	whStr, whValue := b.jwhere.ParseWhere()
+	if whStr != "" {
+		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
+	}
+
+	if len(whValue) > 0 {
+		b.fieldValue = append(b.fieldValue, whValue...)
+	}
+	// 排序
+	if len(b.orderField) > 0 {
+		b.SqlStr += " order by "
+		var order string
+		for _, v := range b.orderField {
+			if len(v) < 2 {
+				continue
+			}
+			if len(v) == 2 {
+				order = fmt.Sprintf("%s,`%s`.`%s` %s", order, b.alias, v[0], v[1])
+			} else if len(v) == 3 {
+				order = fmt.Sprintf("%s,`%s`.`%s` %s", order, v[2], v[0], v[1])
+			}
+		}
+		order = strings.Trim(order, ",")
+		b.SqlStr += order
+	}
+	// 分页
+	if b.offset >= 0 && b.pageSize > 0 {
+		b.SqlStr = fmt.Sprintf("%s limit %d,%d", b.SqlStr, b.offset, b.pageSize)
+	}
+	// 只查询一条
+	if b.offset < 0 && b.pageSize > 0 {
+		b.SqlStr = fmt.Sprintf("%s limit %d", b.SqlStr, b.pageSize)
+	}
+	// 是否打印sql
+	if b.debugSql {
+		fmt.Println(b.SqlStr)
+	}
+	return b.SqlStr, b.fieldValue
+}
+
+/**
+ * 构建创建sql
+**/
+func (b *sqlBuilder) BuildCreate(option map[string]interface{}) (string, map[string]interface{}) {
+	var keys, vals string
+	for k := range option {
+		keys = fmt.Sprintf("%s,`%s`", keys, k)
+		vals = fmt.Sprintf("%s,:%s", vals, k)
+	}
+	keys = strings.TrimLeft(keys, ",")
+	vals = strings.TrimLeft(vals, ",")
+	return fmt.Sprintf("insert into `%s` (%s) values(%s)", b.tableName, keys, vals), option
+}
+
+/**
+ * 构建更新sql
+**/
+func (b *sqlBuilder) BuildUpdate(option map[string]interface{}) (string, []interface{}) {
+	var vals string
+	tableName := b.tableName
+	if b.alias != "" {
+		tableName = b.alias
+	}
+	for k := range option {
+		vals = fmt.Sprintf("%s,`%s`.`%s` = ?", vals, tableName, k)
+		b.fieldValue = append(b.fieldValue, option[k])
+	}
+	b.SqlStr = fmt.Sprintf("update `%s` as `%s` set %s", b.tableName, tableName, strings.TrimLeft(vals, ","))
+
+	// 分组条件
+	// b.groupWhere()
+	whStr, whArgs := b.jwhere.ParseWhere()
+	if whStr != "" {
+		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
+	}
+	if len(whArgs) > 0 {
+		b.fieldValue = append(b.fieldValue, whArgs...)
+	}
+	return b.SqlStr, b.fieldValue
+}
+
+/*
+ * 构建删除sql
+**/
+func (b *sqlBuilder) BuildDelete() (string, []interface{}) {
+	tableName := b.tableName
+	if b.alias != "" {
+		tableName = b.alias
+	}
+	b.SqlStr = fmt.Sprintf("delete `%s` from `%s` as `%s`", tableName, b.tableName, tableName)
+
+	whStr, whArgs := b.jwhere.ParseWhere()
+	if whStr == "" {
+		return "", nil
+	}
+	if whStr != "" {
+		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
+	}
+	if len(whArgs) > 0 {
+		b.fieldValue = append(b.fieldValue, whArgs...)
+	}
+	return b.SqlStr, b.fieldValue
 }

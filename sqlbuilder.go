@@ -321,7 +321,7 @@ func (b *sqlBuilder) BuildSelect() (string, []interface{}) {
 	for _, v := range b.joins {
 		b.SqlStr = fmt.Sprintf("%s %s", b.SqlStr, v)
 	}
-	// 分组条件
+	// 解析查询条件
 	whStr, whValue := b.jwhere.ParseWhere()
 	if whStr != "" {
 		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)

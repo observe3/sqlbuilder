@@ -1,8 +1,5 @@
 package sqlbuilder
 
-type ISetWherer interface {
-	ParseArgs(args ...interface{}) map[string][]Condition
-}
 type IArgser interface {
 	ParseArgs(relation string, args ...interface{}) []GroupWhere
 }

@@ -118,5 +118,14 @@ func TestSqlBuilder(t *testing.T) {
 		WhereAnd("id", "=", 1, "a").
 		BuildDelete()
 	fmt.Println(sql, args)
+	fmt.Println("")
+
+	sql, args = From("produt").As("a").
+		WhereAnd("id", 2).
+		BuildIncrement(map[string]any{
+			"num": 1,
+		})
+	fmt.Println(sql, args)
+	fmt.Println("")
 
 }

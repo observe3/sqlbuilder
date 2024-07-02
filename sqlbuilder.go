@@ -403,6 +403,56 @@ func (b *sqlBuilder) BuildUpdate(option map[string]interface{}) (string, []inter
 	return b.SqlStr, b.fieldValue
 }
 
+/**
+ * 构建累加sql
+**/
+func (b *sqlBuilder) BuildIncrement(option map[string]interface{}) (string, []interface{}) {
+	var vals string
+	tableName := b.tableName
+	if b.alias != "" {
+		tableName = b.alias
+	}
+	for k := range option {
+		vals = fmt.Sprintf("%s,`%s`.`%s` += ?", vals, tableName, k)
+		b.fieldValue = append(b.fieldValue, option[k])
+	}
+	b.SqlStr = fmt.Sprintf("update `%s` as `%s` set %s", b.tableName, tableName, strings.TrimLeft(vals, ","))
+
+	whStr, whArgs := b.jwhere.ParseWhere()
+	if whStr != "" {
+		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
+	}
+	if len(whArgs) > 0 {
+		b.fieldValue = append(b.fieldValue, whArgs...)
+	}
+	return b.SqlStr, b.fieldValue
+}
+
+/**
+ * 构建累减sql
+**/
+func (b *sqlBuilder) BuildDecrement(option map[string]interface{}) (string, []interface{}) {
+	var vals string
+	tableName := b.tableName
+	if b.alias != "" {
+		tableName = b.alias
+	}
+	for k := range option {
+		vals = fmt.Sprintf("%s,`%s`.`%s` -= ?", vals, tableName, k)
+		b.fieldValue = append(b.fieldValue, option[k])
+	}
+	b.SqlStr = fmt.Sprintf("update `%s` as `%s` set %s", b.tableName, tableName, strings.TrimLeft(vals, ","))
+
+	whStr, whArgs := b.jwhere.ParseWhere()
+	if whStr != "" {
+		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
+	}
+	if len(whArgs) > 0 {
+		b.fieldValue = append(b.fieldValue, whArgs...)
+	}
+	return b.SqlStr, b.fieldValue
+}
+
 /*
  * 构建删除sql
 **/

@@ -122,7 +122,7 @@ func TestSqlBuilder(t *testing.T) {
 
 	sql, args = From("produt").As("a").
 		WhereAnd("id", 2).
-		BuildIncrement(map[string]any{
+		BuildDecrement(map[string]any{
 			"num": 1,
 		})
 	fmt.Println(sql, args)

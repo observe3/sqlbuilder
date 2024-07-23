@@ -413,7 +413,7 @@ func (b *sqlBuilder) BuildIncrement(option map[string]interface{}) (string, []in
 		tableName = b.alias
 	}
 	for k := range option {
-		vals = fmt.Sprintf("%s,`%s`.`%s` += ?", vals, tableName, k)
+		vals = fmt.Sprintf("%s,`%s`.`%s` = `%s`.`%s` + ?", vals, tableName, k, tableName, k)
 		b.fieldValue = append(b.fieldValue, option[k])
 	}
 	b.SqlStr = fmt.Sprintf("update `%s` as `%s` set %s", b.tableName, tableName, strings.TrimLeft(vals, ","))
@@ -438,7 +438,7 @@ func (b *sqlBuilder) BuildDecrement(option map[string]interface{}) (string, []in
 		tableName = b.alias
 	}
 	for k := range option {
-		vals = fmt.Sprintf("%s,`%s`.`%s` -= ?", vals, tableName, k)
+		vals = fmt.Sprintf("%s,`%s`.`%s` = `%s`.`%s` - ?", vals, tableName, k, tableName, k)
 		b.fieldValue = append(b.fieldValue, option[k])
 	}
 	b.SqlStr = fmt.Sprintf("update `%s` as `%s` set %s", b.tableName, tableName, strings.TrimLeft(vals, ","))

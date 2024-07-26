@@ -25,6 +25,9 @@ type sqlBuilder struct {
 	// 排序
 	orderField [][]interface{}
 
+	// 分组
+	groupBy []string
+
 	// 联表
 	joins []string
 
@@ -103,6 +106,12 @@ func (b *sqlBuilder) Limit(p, num int64) *sqlBuilder {
 // 排序
 func (b *sqlBuilder) Order(order [][]interface{}) *sqlBuilder {
 	b.orderField = order
+	return b
+}
+
+// 分组
+func (b *sqlBuilder) Group(groupBy ...string) *sqlBuilder {
+	b.groupBy = groupBy
 	return b
 }
 
@@ -330,6 +339,16 @@ func (b *sqlBuilder) BuildSelect() (string, []interface{}) {
 	if len(whValue) > 0 {
 		b.fieldValue = append(b.fieldValue, whValue...)
 	}
+	// 分组
+	if len(b.groupBy) > 0 {
+		b.SqlStr += " group by "
+		var group string
+		for _, v := range b.groupBy {
+			group = fmt.Sprintf("%s,`%s`.`%s`", group, b.alias, v)
+		}
+		group = strings.Trim(group, ",")
+		b.SqlStr += group
+	}
 	// 排序
 	if len(b.orderField) > 0 {
 		b.SqlStr += " order by "
@@ -396,6 +415,8 @@ func (b *sqlBuilder) BuildUpdate(option map[string]interface{}) (string, []inter
 	whStr, whArgs := b.jwhere.ParseWhere()
 	if whStr != "" {
 		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
+	} else {
+		panic("必须有一个条件")
 	}
 	if len(whArgs) > 0 {
 		b.fieldValue = append(b.fieldValue, whArgs...)
@@ -421,6 +442,8 @@ func (b *sqlBuilder) BuildIncrement(option map[string]interface{}) (string, []in
 	whStr, whArgs := b.jwhere.ParseWhere()
 	if whStr != "" {
 		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
+	} else {
+		panic("必须有一个条件")
 	}
 	if len(whArgs) > 0 {
 		b.fieldValue = append(b.fieldValue, whArgs...)
@@ -446,6 +469,8 @@ func (b *sqlBuilder) BuildDecrement(option map[string]interface{}) (string, []in
 	whStr, whArgs := b.jwhere.ParseWhere()
 	if whStr != "" {
 		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
+	} else {
+		panic("必须有一个条件")
 	}
 	if len(whArgs) > 0 {
 		b.fieldValue = append(b.fieldValue, whArgs...)
@@ -469,6 +494,8 @@ func (b *sqlBuilder) BuildDelete() (string, []interface{}) {
 	}
 	if whStr != "" {
 		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
+	} else {
+		panic("必须有一个条件")
 	}
 	if len(whArgs) > 0 {
 		b.fieldValue = append(b.fieldValue, whArgs...)

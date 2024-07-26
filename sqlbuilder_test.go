@@ -47,6 +47,10 @@ func TestSqlBuilder(t *testing.T) {
 			{p1.GetAgeField(), ">", 18, "b"},
 			{p1.GetAgeField(), "<", 20, "b"},
 		}).
+		Order([][]interface{}{
+			{"id", "desc"},
+		}).
+		Group("d_id", "a_id").
 		Limit(0, 1).BuildSelect()
 	fmt.Println(sql, args)
 	fmt.Println("")
@@ -127,5 +131,13 @@ func TestSqlBuilder(t *testing.T) {
 		})
 	fmt.Println(sql, args)
 	fmt.Println("")
+
+	sql, args = From("produt").As("a").
+		Select("classify_name", Fn("SUM", "total_sum", "bill_sum")).
+		WhereAnd("id", 2).
+		Group("classify_id").
+		WhereAnd("in_num", "<", SField("", "num", "")).
+		BuildSelect()
+	fmt.Println(sql, args)
 
 }

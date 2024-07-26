@@ -189,6 +189,12 @@ func childQuery(w Condition) (string, []interface{}) {
 	case string, int, int8, int16, int32, int64, float32, float64, bool:
 		result = append(result, val)
 		placeholder = "?"
+	case *scolumn:
+		if val.TableAlias == "" {
+			placeholder = fmt.Sprintf("`%s`", val.Field)
+		} else {
+			placeholder = fmt.Sprintf("`%s`.`%s`", val.TableAlias, val.Field)
+		}
 	}
 	return placeholder, result
 }

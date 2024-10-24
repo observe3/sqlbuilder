@@ -28,6 +28,9 @@ type sqlBuilder struct {
 	// 分组
 	groupBy []string
 
+	// having后面的条件
+	hwhere *Where
+
 	// 联表
 	joins []string
 
@@ -56,6 +59,12 @@ func From(tableName string, args ...interface{}) *sqlBuilder {
 		tableName: tableName,
 		alias:     tableName,
 		jwhere: &Where{
+			tableName:     tableName,
+			alias:         tableName,
+			groupWhere:    make([]GroupWhere, 0),
+			assembleWhere: make([][]GroupWhere, 0),
+		},
+		hwhere: &Where{
 			tableName:     tableName,
 			alias:         tableName,
 			groupWhere:    make([]GroupWhere, 0),
@@ -147,6 +156,16 @@ func (b *sqlBuilder) WhereAnd(args ...interface{}) *sqlBuilder {
 	return b
 }
 
+func (b *sqlBuilder) HavingWhereAnd(args ...interface{}) *sqlBuilder {
+	b.havingWhere("and", args...)
+	return b
+}
+
+func (b *sqlBuilder) HavingWhereOr(args ...interface{}) *sqlBuilder {
+	b.havingWhere("or", args...)
+	return b
+}
+
 /*
 * or条件
   - WhereOr("age", 18)
@@ -184,13 +203,19 @@ func (b *sqlBuilder) WhereOr(args ...interface{}) *sqlBuilder {
 *
 */
 func (b *sqlBuilder) where(relation string, args ...interface{}) *sqlBuilder {
-	if len(args) > 1 {
-		if val, ok := args[0].(string); !ok || val == "" {
-			panic("args[0] 必须是一个字符串并且不能为空")
-		}
+	if val, ok := ArgsMap[len(args)]; ok {
+		groupWhere := val.ParseArgs(relation, args...)
+		b.jwhere.assembleWhere = append(b.jwhere.assembleWhere, groupWhere)
 	}
-	groupWhere := ArgsMap[len(args)].ParseArgs(relation, args...)
-	b.jwhere.assembleWhere = append(b.jwhere.assembleWhere, groupWhere)
+	return b
+}
+
+// 设置having条件
+func (b *sqlBuilder) havingWhere(relation string, args ...interface{}) *sqlBuilder {
+	if val, ok := ArgsMap[len(args)]; ok {
+		groupWhere := val.ParseArgs(relation, args...)
+		b.hwhere.assembleWhere = append(b.hwhere.assembleWhere, groupWhere)
+	}
 	return b
 }
 
@@ -289,6 +314,9 @@ func (b *sqlBuilder) BuildSelect() (string, []interface{}) {
 				nfield = fmt.Sprintf("%s(%s) as `%s`", val.Fn, fnp, val.Alias)
 			}
 		case *scolumn:
+			if val.TableAlias == "" && val.Field == "" && val.FieldAlias == "" {
+				continue
+			}
 			if val.TableAlias != "" {
 				nfield = fmt.Sprintf("`%s`.`%s` %s", val.TableAlias, val.Field, val.FieldAlias)
 				nfield = strings.TrimSpace(nfield)
@@ -349,6 +377,15 @@ func (b *sqlBuilder) BuildSelect() (string, []interface{}) {
 		group = strings.Trim(group, ",")
 		b.SqlStr += group
 	}
+	// 过滤
+	hwhStr, hwhValue := b.hwhere.ParseWhere()
+	if hwhStr != "" {
+		b.SqlStr = fmt.Sprintf("%s having %s", b.SqlStr, hwhStr)
+	}
+	if len(hwhValue) > 0 {
+		b.fieldValue = append(b.fieldValue, hwhValue...)
+	}
+
 	// 排序
 	if len(b.orderField) > 0 {
 		b.SqlStr += " order by "
@@ -404,9 +441,19 @@ func (b *sqlBuilder) BuildUpdate(option map[string]interface{}) (string, []inter
 	if b.alias != "" {
 		tableName = b.alias
 	}
-	for k := range option {
-		vals = fmt.Sprintf("%s,`%s`.`%s` = ?", vals, tableName, k)
-		b.fieldValue = append(b.fieldValue, option[k])
+	for k, v := range option {
+		switch val := v.(type) {
+		case string:
+			b.fieldValue = append(b.fieldValue, val)
+			vals = fmt.Sprintf("%s,`%s`.`%s` = ?", vals, tableName, k)
+		case int, int8, int32, int16, int64, uint, uint8, uint16, uint32, uint64,
+			float32, float64:
+			b.fieldValue = append(b.fieldValue, val)
+			vals = fmt.Sprintf("%s,`%s`.`%s` = ?", vals, tableName, k)
+		case []any:
+			b.fieldValue = append(b.fieldValue, val[2])
+			vals = fmt.Sprintf("%s,`%s`.`%s` = `%s`.`%s`%s?", vals, tableName, k, tableName, val[0], val[1])
+		}
 	}
 	b.SqlStr = fmt.Sprintf("update `%s` as `%s` set %s", b.tableName, tableName, strings.TrimLeft(vals, ","))
 

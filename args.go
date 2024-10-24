@@ -1,5 +1,10 @@
 package sqlbuilder
 
+import (
+	"fmt"
+	"strings"
+)
+
 type IArgser interface {
 	ParseArgs(relation string, args ...interface{}) []GroupWhere
 }
@@ -55,34 +60,42 @@ func (r *OneArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 }
 func groupCondition(andWh *[]Condition, v []interface{}) string {
 	var relation string
+	nfield, ftype := parseAggregation(v...)
+	if nfield == "" {
+		return ""
+	}
 	switch len(v) {
 	case 5:
 		*andWh = append(*andWh, Condition{
-			Field:     v[0].(string),
+			Field:     nfield,
 			Condition: v[1].(string),
 			Value:     v[2],
 			TableName: v[3].(string),
 			Relation:  v[4].(string),
+			FieldType: ftype,
 		})
 		relation = v[4].(string)
 	case 4:
 		*andWh = append(*andWh, Condition{
-			Field:     v[0].(string),
+			Field:     nfield,
 			Condition: v[1].(string),
 			Value:     v[2],
 			TableName: v[3].(string),
+			FieldType: ftype,
 		})
 	case 3:
 		*andWh = append(*andWh, Condition{
-			Field:     v[0].(string),
+			Field:     nfield,
 			Condition: v[1].(string),
 			Value:     v[2],
+			FieldType: ftype,
 		})
 	case 2:
 		*andWh = append(*andWh, Condition{
-			Field:     v[0].(string),
+			Field:     nfield,
 			Condition: "=",
 			Value:     v[1],
+			FieldType: ftype,
 		})
 	}
 	return relation
@@ -93,13 +106,18 @@ type TwoArgs struct {
 
 func (r *TwoArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
+	nfield, ftype := parseAggregation(args...)
+	if nfield == "" {
+		return groupWhere
+	}
 	groupWhere = append(groupWhere, GroupWhere{
 		Relation: relation,
 		Condition: []Condition{
 			{
-				Field:     args[0].(string),
+				Field:     nfield,
 				Condition: "=",
 				Value:     args[1],
+				FieldType: ftype,
 			},
 		},
 	})
@@ -111,13 +129,18 @@ type ThreeArgs struct {
 
 func (r *ThreeArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
+	nfield, ftype := parseAggregation(args...)
+	if nfield == "" {
+		return groupWhere
+	}
 	groupWhere = append(groupWhere, GroupWhere{
 		Relation: relation,
 		Condition: []Condition{
 			{
-				Field:     args[0].(string),
+				Field:     nfield,
 				Condition: args[1].(string),
 				Value:     args[2],
+				FieldType: ftype,
 			},
 		},
 	})
@@ -129,14 +152,19 @@ type FourArgs struct {
 
 func (r *FourArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
+	nfield, ftype := parseAggregation(args...)
+	if nfield == "" {
+		return groupWhere
+	}
 	groupWhere = append(groupWhere, GroupWhere{
 		Relation: relation,
 		Condition: []Condition{
 			{
-				Field:     args[0].(string),
+				Field:     nfield,
 				Condition: args[1].(string),
 				Value:     args[2],
 				TableName: args[3].(string),
+				FieldType: ftype,
 			},
 		},
 	})
@@ -151,17 +179,54 @@ func (r *FiveArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere 
 	if val, ok := args[4].(string); ok {
 		relation = val
 	}
+	nfield, ftype := parseAggregation(args...)
+	if nfield == "" {
+		return groupWhere
+	}
 	groupWhere = append(groupWhere, GroupWhere{
 		Relation: relation,
 		Condition: []Condition{
 			{
-				Field:     args[0].(string),
+				Field:     nfield,
 				Condition: args[1].(string),
 				Value:     args[2],
 				TableName: args[3].(string),
 				Relation:  args[4].(string),
+				FieldType: ftype,
 			},
 		},
 	})
 	return groupWhere
+}
+
+func parseAggregation(args ...interface{}) (string, int64) {
+	for _, v := range args {
+		if val, ok := v.(string); ok {
+			if strings.Contains(val, "#") || strings.Contains(val, "--") || strings.Contains(val, "/*") {
+				return "", 0
+			}
+		}
+	}
+	var nfield string
+	var ftype int64
+	if firstField, ok := args[0].(string); ok {
+		nfield = firstField
+		ftype = 1
+	} else if val, ok := args[0].(*fcolumn); ok {
+		if val.Fn != "" {
+			var fnp string
+			plen := len(val.Params)
+			if plen == 1 {
+				fnp = fmt.Sprintf("%s, `%v`", fnp, val.Params[0])
+			} else {
+				for _, vv := range val.Params {
+					fnp = fmt.Sprintf("%s, %v", fnp, vv)
+				}
+			}
+			fnp = strings.TrimLeft(fnp, ", ")
+			nfield = fmt.Sprintf("%s(%s)", val.Fn, fnp)
+		}
+		ftype = 2
+	}
+	return nfield, ftype
 }

@@ -47,8 +47,8 @@ type LikeOp struct {
 }
 
 func (r *LikeOp) Operate(w Condition) (string, string, []interface{}) {
-	_, result := childQuery(w)
-	return strings.ToLower(r.Symbol), "CONCAT('%',?,'%')", result
+	placeholder, result := handleCondition(w)
+	return strings.ToLower(r.Symbol), placeholder, result
 }
 
 type StartWithOp struct {
@@ -56,8 +56,8 @@ type StartWithOp struct {
 }
 
 func (r *StartWithOp) Operate(w Condition) (string, string, []interface{}) {
-	_, result := childQuery(w)
-	return strings.ToLower(r.Symbol), "CONCAT(?,'%')", result
+	placeholder, result := handleCondition(w)
+	return strings.ToLower(r.Symbol), placeholder, result
 }
 
 type EndWithOp struct {
@@ -65,8 +65,8 @@ type EndWithOp struct {
 }
 
 func (r *EndWithOp) Operate(w Condition) (string, string, []interface{}) {
-	_, result := childQuery(w)
-	return strings.ToLower(r.Symbol), "CONCAT('%',?)", result
+	placeholder, result := handleCondition(w)
+	return strings.ToLower(r.Symbol), placeholder, result
 }
 
 type InOp struct {
@@ -127,7 +127,7 @@ type EqualOp struct {
 }
 
 func (r *EqualOp) Operate(w Condition) (string, string, []interface{}) {
-	placeholder, result := childQuery(w)
+	placeholder, result := handleCondition(w)
 	return strings.ToLower(r.Symbol), placeholder, result
 }
 
@@ -136,7 +136,7 @@ type GtOp struct {
 }
 
 func (r *GtOp) Operate(w Condition) (string, string, []interface{}) {
-	placeholder, result := childQuery(w)
+	placeholder, result := handleCondition(w)
 	return strings.ToLower(r.Symbol), placeholder, result
 }
 
@@ -145,7 +145,7 @@ type LtOp struct {
 }
 
 func (r *LtOp) Operate(w Condition) (string, string, []interface{}) {
-	placeholder, result := childQuery(w)
+	placeholder, result := handleCondition(w)
 	return strings.ToLower(r.Symbol), placeholder, result
 }
 
@@ -178,22 +178,41 @@ func (r *BetweenOp) Operate(w Condition) (string, string, []interface{}) {
 	}
 }
 
-func childQuery(w Condition) (string, []interface{}) {
+func handleCondition(w Condition) (string, []interface{}) {
 	var result []interface{}
-	var placeholder string
+	var placeholder string = "?"
 	switch val := w.Value.(type) {
 	case *sqlBuilder:
 		buildQuery, args := val.BuildSelect()
 		result = append(result, args...)
 		placeholder = fmt.Sprintf("(%v)", buildQuery)
-	case string, int, int8, int16, int32, int64, float32, float64, bool:
+	case int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64:
 		result = append(result, val)
 		placeholder = "?"
+	case string:
+		if w.Condition == NLIKE || w.Condition == LIKE {
+			val = "%" + val + "%"
+		} else if w.Condition == START_WITH || w.Condition == NSTART_WITH {
+			val = val + "%"
+		} else if w.Condition == END_WITH || w.Condition == NEND_WITH {
+			val = "%" + val
+		}
+		result = append(result, val)
+	case float32, float64:
+		result = append(result, val)
+	case bool:
+		result = append(result, val)
 	case *scolumn:
-		if val.TableAlias == "" {
-			placeholder = fmt.Sprintf("`%s`", val.Field)
+		if val.TableAlias == "" && val.Field == "" && val.FieldAlias == "" {
+			placeholder = ""
+			result = nil
 		} else {
-			placeholder = fmt.Sprintf("`%s`.`%s`", val.TableAlias, val.Field)
+			if val.TableAlias == "" {
+				placeholder = fmt.Sprintf("`%s`", val.Field)
+			} else {
+				placeholder = fmt.Sprintf("`%s`.`%s`", val.TableAlias, val.Field)
+			}
 		}
 	}
 	return placeholder, result

@@ -139,5 +139,45 @@ func TestSqlBuilder(t *testing.T) {
 		WhereAnd("in_num", "<", SField("", "num", "")).
 		BuildSelect()
 	fmt.Println(sql, args)
+	fmt.Println("")
 
+	var wh [][][]interface{}
+	wh = append(wh, [][]interface{}{
+		{"name", "like", "张三"},
+		{"id", "in", From("user_age").WhereAnd("age", ">", 233)},
+	})
+	sql, args = From("admin").As("a").WhereAnd(wh).BuildSelect()
+	fmt.Println(sql, args)
+	fmt.Println("")
+
+	// 子查询
+	sql, args = From("product_static", From("product_static").Select("id", "name").WhereAnd("name", "start with", "苹果")).Select(Fn("count", "total", "*")).BuildSelect()
+	fmt.Println(sql, args)
+	fmt.Println("")
+
+	// 累加、减、乘、除某个字段
+	// action: + - * /
+	sql, args = From("inventory").As("a").WhereAnd("id", 1).BuildUpdate(map[string]interface{}{
+		"num":  []any{"u_num", "+", 20},
+		"name": "张三",
+	})
+	fmt.Println(sql, args)
+	fmt.Println("")
+
+	// having
+	sql, args = From("produt").As("a").
+		Select("classify_id", Fn("SUM", "total_sum", "bill_sum")).
+		WhereAnd("id", 2).
+		Group("classify_id").
+		WhereAnd([][]any{
+			{"in_num", "<", SField("a", "num", "")},
+		}).
+		HavingWhereAnd([][]interface{}{
+			{"id", "=", 23},
+			{"age", ">", 23},
+		}).
+		HavingWhereAnd(Fn("sum", "total_sum", "sum"), ">", 423).
+		BuildSelect()
+	fmt.Println(sql, args)
+	fmt.Println("")
 }

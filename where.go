@@ -10,6 +10,8 @@ type Condition struct {
 	// 字段
 	Field string
 
+	FieldType int64
+
 	// 条件
 	Condition string
 
@@ -69,34 +71,33 @@ func (r *Where) ParseWhere() (string, []interface{}) {
 					firstRelation = v.Relation
 				}
 				if whStr.Len() > 0 {
-					// whStr = fmt.Sprintf("%s %s", whStr, firstRelation)
 					whStr.WriteString(" " + firstRelation)
 				}
 				if len(bigGroup) > 1 && j == 0 && k == 0 {
-					// whStr = fmt.Sprintf("%s (", whStr)
 					whStr.WriteString(" (")
 				}
 				if len(v.Condition) > 1 && k == 0 {
-					// whStr = fmt.Sprintf("%s (", whStr)
 					whStr.WriteString(" " + "(")
 				}
-				// whStr = fmt.Sprintf("%s `%s`.`%s` %s %s", whStr, tableName, w.Field, operater, placeholder)
 				joinStr := ""
 				if whStr.Len() > 0 {
 					joinStr += " "
 				}
-				whStr.WriteString(joinStr + "`" + tableName + "`.`" + w.Field + "` " + operater + " " + placeholder)
+				// normal field
+				if w.FieldType == 1 {
+					whStr.WriteString(joinStr + "`" + tableName + "`.`" + w.Field + "` " + operater + " " + placeholder)
+				} else if w.FieldType == 2 {
+					// special
+					whStr.WriteString(joinStr + w.Field + " " + operater + " " + placeholder)
+				}
 				if len(v.Condition) > 1 && k == len(v.Condition)-1 {
-					// whStr = fmt.Sprintf("%s )", whStr)
 					whStr.WriteString(" )")
 				}
 				if len(bigGroup) > 1 && j == len(bigGroup)-1 && k == len(v.Condition)-1 {
-					// whStr = fmt.Sprintf("%s)", whStr)
 					whStr.WriteString(")")
 				}
 			}
 		}
-		// whStr = strings.TrimSpace(whStr)
 	}
 	if whStr.String() == "" {
 		fieldValue = nil
@@ -126,5 +127,8 @@ func (r *Where) SetGroup() {
 }
 
 func (r *Where) parseOperater(w Condition) (string, string, []interface{}) {
-	return SymbolMap[strings.ToLower(w.Condition)].Operate(w)
+	if val, ok := SymbolMap[strings.ToLower(w.Condition)]; ok {
+		return val.Operate(w)
+	}
+	return "", "", nil
 }

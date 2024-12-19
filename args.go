@@ -202,7 +202,7 @@ func (r *FiveArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere 
 func parseAggregation(args ...interface{}) (string, int64) {
 	for _, v := range args {
 		if val, ok := v.(string); ok {
-			if strings.Contains(val, "#") || strings.Contains(val, "--") || strings.Contains(val, "/*") {
+			if hasIllegalStr(val) {
 				return "", 0
 			}
 		}
@@ -212,16 +212,11 @@ func parseAggregation(args ...interface{}) (string, int64) {
 	if firstField, ok := args[0].(string); ok {
 		nfield = firstField
 		ftype = 1
-	} else if val, ok := args[0].(*fcolumn); ok {
+	} else if val, ok := args[0].(*funCarrier); ok {
 		if val.Fn != "" {
 			var fnp string
-			plen := len(val.Params)
-			if plen == 1 {
-				fnp = fmt.Sprintf("%s, `%v`", fnp, val.Params[0])
-			} else {
-				for _, vv := range val.Params {
-					fnp = fmt.Sprintf("%s, %v", fnp, vv)
-				}
+			for _, vv := range val.Params {
+				fnp = fmt.Sprintf("%s, %v", fnp, vv)
 			}
 			fnp = strings.TrimLeft(fnp, ", ")
 			nfield = fmt.Sprintf("%s(%s)", val.Fn, fnp)

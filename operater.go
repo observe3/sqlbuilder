@@ -189,7 +189,6 @@ func handleCondition(w Condition) (string, []interface{}) {
 	case int, int8, int16, int32, int64,
 		uint, uint8, uint16, uint32, uint64:
 		result = append(result, val)
-		placeholder = "?"
 	case string:
 		if w.Condition == NLIKE || w.Condition == LIKE {
 			val = "%" + val + "%"
@@ -203,16 +202,15 @@ func handleCondition(w Condition) (string, []interface{}) {
 		result = append(result, val)
 	case bool:
 		result = append(result, val)
-	case *scolumn:
-		if val.TableAlias == "" && val.Field == "" && val.FieldAlias == "" {
-			placeholder = ""
-			result = nil
-		} else {
-			if val.TableAlias == "" {
-				placeholder = fmt.Sprintf("`%s`", val.Field)
-			} else {
-				placeholder = fmt.Sprintf("`%s`.`%s`", val.TableAlias, val.Field)
-			}
+	case *colCarrier:
+		if val.Field != "" && val.TableAlias != "" {
+			placeholder = fmt.Sprintf("`%s`.`%s`", val.TableAlias, val.Field)
+		} else if val.Field != "" {
+			placeholder = fmt.Sprintf("`%s`", val.Field)
+		}
+	case *literalCarrier:
+		if val.OriginVal != "" {
+			placeholder = val.OriginVal
 		}
 	}
 	return placeholder, result

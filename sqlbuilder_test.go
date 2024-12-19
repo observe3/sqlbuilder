@@ -137,9 +137,9 @@ func TestSqlBuilder(t *testing.T) {
 		WhereAnd("id", 2).
 		Group("classify_id").
 		WhereAnd("in_num", "<", SField("", "num", "")).
+		WhereAnd("in_sum", "<", Literal("sum+u_sum")).
 		BuildSelect()
 	fmt.Println(sql, args)
-	fmt.Println("")
 
 	var wh [][][]interface{}
 	wh = append(wh, [][]interface{}{
@@ -170,7 +170,7 @@ func TestSqlBuilder(t *testing.T) {
 		WhereAnd("id", 2).
 		Group("classify_id").
 		WhereAnd([][]any{
-			{"in_num", "<", SField("a", "num", "")},
+			{"in_num", "<", Literal("num+sum")},
 		}).
 		HavingWhereAnd([][]interface{}{
 			{"id", "=", 23},

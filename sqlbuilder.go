@@ -304,7 +304,7 @@ func (b *sqlBuilder) BuildSelect() (string, []interface{}) {
 				fstr = strings.Split(fstr, ".")[1]
 			}
 			nfield = fmt.Sprintf("(%s) as `%s`", childQuery, fstr)
-		case *fcolumn:
+		case *funCarrier:
 			if val.Fn != "" {
 				var fnp string
 				for _, vv := range val.Params {
@@ -313,7 +313,7 @@ func (b *sqlBuilder) BuildSelect() (string, []interface{}) {
 				fnp = strings.TrimLeft(fnp, ", ")
 				nfield = fmt.Sprintf("%s(%s) as `%s`", val.Fn, fnp, val.Alias)
 			}
-		case *scolumn:
+		case *colCarrier:
 			if val.TableAlias == "" && val.Field == "" && val.FieldAlias == "" {
 				continue
 			}

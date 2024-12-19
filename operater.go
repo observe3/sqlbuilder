@@ -10,70 +10,70 @@ type IOperater interface {
 	Operate(w Condition) (string, string, []interface{})
 }
 
-var SymbolMap map[string]IOperater
+var symbolMap map[string]IOperater
 
 func init() {
-	SymbolMap = make(map[string]IOperater)
-	SymbolMap = map[string]IOperater{
-		LIKE:         &LikeOp{Symbol: "like"},
-		NLIKE:        &LikeOp{Symbol: "not like"},
-		START_WITH:   &StartWithOp{Symbol: "like"},
-		NSTART_WITH:  &StartWithOp{Symbol: "not like"},
-		END_WITH:     &EndWithOp{Symbol: "like"},
-		NEND_WITH:    &EndWithOp{Symbol: "not like"},
-		IN:           &InOp{Symbol: "in"},
-		NIN:          &InOp{Symbol: "not in"},
-		IS_NULL:      &IsNullOp{Symbol: "is null"},
-		IS_NOT_NULL:  &IsNullOp{Symbol: "is not null"},
-		IS_EMPTY:     &IsEmptyOp{Symbol: "=''"},
-		IS_NOT_EMPTY: &IsEmptyOp{Symbol: "!=''"},
-		EQUAL:        &EqualOp{Symbol: "="},
-		NEQUAL:       &EqualOp{Symbol: "!="},
-		GT:           &GtOp{Symbol: ">"},
-		GTE:          &GtOp{Symbol: ">="},
-		LT:           &LtOp{Symbol: "<"},
-		LTE:          &LtOp{Symbol: "<="},
-		BETWEEN:      &BetweenOp{Symbol: "between"},
-		NBETWEEN:     &BetweenOp{Symbol: "not between"},
+	symbolMap = make(map[string]IOperater)
+	symbolMap = map[string]IOperater{
+		LIKE:         &likeOp{Symbol: "like"},
+		NLIKE:        &likeOp{Symbol: "not like"},
+		START_WITH:   &startWithOp{Symbol: "like"},
+		NSTART_WITH:  &startWithOp{Symbol: "not like"},
+		END_WITH:     &endWithOp{Symbol: "like"},
+		NEND_WITH:    &endWithOp{Symbol: "not like"},
+		IN:           &inOp{Symbol: "in"},
+		NIN:          &inOp{Symbol: "not in"},
+		IS_NULL:      &isNullOp{Symbol: "is null"},
+		IS_NOT_NULL:  &isNullOp{Symbol: "is not null"},
+		IS_EMPTY:     &isEmptyOp{Symbol: "=''"},
+		IS_NOT_EMPTY: &isEmptyOp{Symbol: "!=''"},
+		EQUAL:        &equalOp{Symbol: "="},
+		NEQUAL:       &equalOp{Symbol: "!="},
+		GT:           &gtOp{Symbol: ">"},
+		GTE:          &gtOp{Symbol: ">="},
+		LT:           &ltOp{Symbol: "<"},
+		LTE:          &ltOp{Symbol: "<="},
+		BETWEEN:      &betweenOp{Symbol: "between"},
+		NBETWEEN:     &betweenOp{Symbol: "not between"},
 	}
 }
 
 func RegisterSymbol(operater string, obj IOperater) {
-	SymbolMap[operater] = obj
+	symbolMap[operater] = obj
 }
 
-type LikeOp struct {
+type likeOp struct {
 	Symbol string
 }
 
-func (r *LikeOp) Operate(w Condition) (string, string, []interface{}) {
+func (r *likeOp) Operate(w Condition) (string, string, []interface{}) {
 	placeholder, result := handleCondition(w)
 	return strings.ToLower(r.Symbol), placeholder, result
 }
 
-type StartWithOp struct {
+type startWithOp struct {
 	Symbol string
 }
 
-func (r *StartWithOp) Operate(w Condition) (string, string, []interface{}) {
+func (r *startWithOp) Operate(w Condition) (string, string, []interface{}) {
 	placeholder, result := handleCondition(w)
 	return strings.ToLower(r.Symbol), placeholder, result
 }
 
-type EndWithOp struct {
+type endWithOp struct {
 	Symbol string
 }
 
-func (r *EndWithOp) Operate(w Condition) (string, string, []interface{}) {
+func (r *endWithOp) Operate(w Condition) (string, string, []interface{}) {
 	placeholder, result := handleCondition(w)
 	return strings.ToLower(r.Symbol), placeholder, result
 }
 
-type InOp struct {
+type inOp struct {
 	Symbol string
 }
 
-func (r *InOp) Operate(w Condition) (string, string, []interface{}) {
+func (r *inOp) Operate(w Condition) (string, string, []interface{}) {
 	var length int
 	var result []interface{}
 	var placeholder string
@@ -104,56 +104,56 @@ func (r *InOp) Operate(w Condition) (string, string, []interface{}) {
 	return strings.ToLower(r.Symbol), placeholder, result
 }
 
-type IsNullOp struct {
+type isNullOp struct {
 	Symbol string
 }
 
-func (r *IsNullOp) Operate(w Condition) (string, string, []interface{}) {
+func (r *isNullOp) Operate(w Condition) (string, string, []interface{}) {
 	var result []interface{}
 	return strings.ToLower(r.Symbol), "", result
 }
 
-type IsEmptyOp struct {
+type isEmptyOp struct {
 	Symbol string
 }
 
-func (r *IsEmptyOp) Operate(w Condition) (string, string, []interface{}) {
+func (r *isEmptyOp) Operate(w Condition) (string, string, []interface{}) {
 	var result []interface{}
 	return strings.ToLower(r.Symbol), "", result
 }
 
-type EqualOp struct {
+type equalOp struct {
 	Symbol string
 }
 
-func (r *EqualOp) Operate(w Condition) (string, string, []interface{}) {
+func (r *equalOp) Operate(w Condition) (string, string, []interface{}) {
 	placeholder, result := handleCondition(w)
 	return strings.ToLower(r.Symbol), placeholder, result
 }
 
-type GtOp struct {
+type gtOp struct {
 	Symbol string
 }
 
-func (r *GtOp) Operate(w Condition) (string, string, []interface{}) {
+func (r *gtOp) Operate(w Condition) (string, string, []interface{}) {
 	placeholder, result := handleCondition(w)
 	return strings.ToLower(r.Symbol), placeholder, result
 }
 
-type LtOp struct {
+type ltOp struct {
 	Symbol string
 }
 
-func (r *LtOp) Operate(w Condition) (string, string, []interface{}) {
+func (r *ltOp) Operate(w Condition) (string, string, []interface{}) {
 	placeholder, result := handleCondition(w)
 	return strings.ToLower(r.Symbol), placeholder, result
 }
 
-type BetweenOp struct {
+type betweenOp struct {
 	Symbol string
 }
 
-func (r *BetweenOp) Operate(w Condition) (string, string, []interface{}) {
+func (r *betweenOp) Operate(w Condition) (string, string, []interface{}) {
 	var result []interface{}
 	var length int
 	switch val := w.Value.(type) {

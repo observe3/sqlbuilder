@@ -127,7 +127,7 @@ func (r *Where) SetGroup() {
 }
 
 func (r *Where) parseOperater(w Condition) (string, string, []interface{}) {
-	if val, ok := SymbolMap[strings.ToLower(w.Condition)]; ok {
+	if val, ok := symbolMap[strings.ToLower(w.Condition)]; ok {
 		return val.Operate(w)
 	}
 	return "", "", nil

@@ -9,21 +9,28 @@ type IArgser interface {
 	ParseArgs(relation string, args ...interface{}) []GroupWhere
 }
 
-var ArgsMap map[int]IArgser
+var argsMap map[int]IArgser
 
 func init() {
-	ArgsMap = make(map[int]IArgser)
-	ArgsMap[1] = &OneArgs{}
-	ArgsMap[2] = &TwoArgs{}
-	ArgsMap[3] = &ThreeArgs{}
-	ArgsMap[4] = &FourArgs{}
-	ArgsMap[5] = &FiveArgs{}
+	argsMap = make(map[int]IArgser)
+	argsMap[1] = &oneArgs{}
+	argsMap[2] = &twoArgs{}
+	argsMap[3] = &threeArgs{}
+	argsMap[4] = &fourArgs{}
+	argsMap[5] = &fiveArgs{}
 }
 
-type OneArgs struct {
+/**
+ * 注册参数处理函数
+ */
+func RegisterArgsHandle(n int, obj IArgser) {
+	argsMap[n] = obj
 }
 
-func (r *OneArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
+type oneArgs struct {
+}
+
+func (r *oneArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
 	switch whs := args[0].(type) {
 	case [][]interface{}:
@@ -101,10 +108,10 @@ func groupCondition(andWh *[]Condition, v []interface{}) string {
 	return relation
 }
 
-type TwoArgs struct {
+type twoArgs struct {
 }
 
-func (r *TwoArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
+func (r *twoArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
 	nfield, ftype := parseAggregation(args...)
 	if nfield == "" {
@@ -124,10 +131,10 @@ func (r *TwoArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 	return groupWhere
 }
 
-type ThreeArgs struct {
+type threeArgs struct {
 }
 
-func (r *ThreeArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
+func (r *threeArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
 	nfield, ftype := parseAggregation(args...)
 	if nfield == "" {
@@ -147,10 +154,10 @@ func (r *ThreeArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere
 	return groupWhere
 }
 
-type FourArgs struct {
+type fourArgs struct {
 }
 
-func (r *FourArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
+func (r *fourArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
 	nfield, ftype := parseAggregation(args...)
 	if nfield == "" {
@@ -171,10 +178,10 @@ func (r *FourArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere 
 	return groupWhere
 }
 
-type FiveArgs struct {
+type fiveArgs struct {
 }
 
-func (r *FiveArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
+func (r *fiveArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
 	if val, ok := args[4].(string); ok {
 		relation = val

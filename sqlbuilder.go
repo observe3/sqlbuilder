@@ -203,7 +203,7 @@ func (b *sqlBuilder) WhereOr(args ...interface{}) *sqlBuilder {
 *
 */
 func (b *sqlBuilder) where(relation string, args ...interface{}) *sqlBuilder {
-	if val, ok := ArgsMap[len(args)]; ok {
+	if val, ok := argsMap[len(args)]; ok {
 		groupWhere := val.ParseArgs(relation, args...)
 		b.jwhere.assembleWhere = append(b.jwhere.assembleWhere, groupWhere)
 	}
@@ -212,7 +212,7 @@ func (b *sqlBuilder) where(relation string, args ...interface{}) *sqlBuilder {
 
 // 设置having条件
 func (b *sqlBuilder) havingWhere(relation string, args ...interface{}) *sqlBuilder {
-	if val, ok := ArgsMap[len(args)]; ok {
+	if val, ok := argsMap[len(args)]; ok {
 		groupWhere := val.ParseArgs(relation, args...)
 		b.hwhere.assembleWhere = append(b.hwhere.assembleWhere, groupWhere)
 	}

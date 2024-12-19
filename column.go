@@ -8,6 +8,7 @@ type funCarrier struct {
 
 /**
  * 使用mysql函数
+ * 避免使用本函数来拼接用户提交的数据
  * fn 表示函数名，如：sum,max,min,count,avg
  * alias 表示别名
  * params 表示函数参数
@@ -37,6 +38,7 @@ type colCarrier struct {
 
 /**
  * 查询指定表的字段
+ * 避免使用本函数来拼接用户提交的数据
  */
 func SField(tableAlias, field, fieldAlias string) *colCarrier {
 	temp := []string{tableAlias, field, fieldAlias}

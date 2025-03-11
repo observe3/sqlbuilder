@@ -216,10 +216,12 @@ func parseAggregation(args ...interface{}) (string, int64) {
 	}
 	var nfield string
 	var ftype int64
-	if firstField, ok := args[0].(string); ok {
-		nfield = firstField
+	switch args[0].(type) {
+	case string:
+		nfield = args[0].(string)
 		ftype = 1
-	} else if val, ok := args[0].(*funCarrier); ok {
+	case *colCarrier:
+		val := args[0].(*funCarrier)
 		if val.Fn != "" {
 			var fnp string
 			for _, vv := range val.Params {
@@ -229,6 +231,13 @@ func parseAggregation(args ...interface{}) (string, int64) {
 			nfield = fmt.Sprintf("%s(%s)", val.Fn, fnp)
 		}
 		ftype = 2
+	case *literalCarrier:
+		val := args[0].(*literalCarrier)
+		nfield = val.OriginVal
+		ftype = 2
+	default:
+		nfield = ""
+		ftype = 0
 	}
 	return nfield, ftype
 }

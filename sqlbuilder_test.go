@@ -170,7 +170,7 @@ func TestSqlBuilder(t *testing.T) {
 		WhereAnd("id", 2).
 		Group("classify_id").
 		WhereAnd([][]any{
-			{"in_num", "<", Literal("num+sum")},
+			{Literal("`a`.`in_num`+`a`.`a_num`"), "<", Literal("num+sum")},
 		}).
 		HavingWhereAnd([][]interface{}{
 			{"id", "=", 23},

@@ -91,7 +91,7 @@ func TestSqlBuilder(t *testing.T) {
 	fmt.Println(sql)
 	fmt.Println("")
 
-	sql, a := From("admin").WhereAnd("id", 1).BuildUpdate(map[string]any{
+	sql, a := From("admin").WhereAnd("id", 1).BuildPUpdate(map[string]any{
 		"name": "张三",
 		"age":  18,
 	})
@@ -157,7 +157,7 @@ func TestSqlBuilder(t *testing.T) {
 
 	// 累加、减、乘、除某个字段
 	// action: + - * /
-	sql, args = From("inventory").As("a").WhereAnd("id", 1).BuildUpdate(map[string]interface{}{
+	sql, args = From("inventory").As("a").WhereAnd("id", 1).BuildPUpdate(map[string]interface{}{
 		"num":  []any{"u_num", "+", 20},
 		"name": "张三",
 	})
@@ -180,4 +180,44 @@ func TestSqlBuilder(t *testing.T) {
 		BuildSelect()
 	fmt.Println(sql, args)
 	fmt.Println("")
+
+	// 使用map构建插入sql，占位符
+	sql, args = From("produt").BuildPCreate(&[]map[string]interface{}{
+		{"id": 1, "name": "张三", "age": 23},
+		{"id": 2, "name": "张三2", "age": 25},
+	})
+	fmt.Println(sql, args)
+	fmt.Println("")
+
+	// 使用结构体构建插入sql，命名参数
+	sql, err := From("person2").As("a").BuildSCreate(&Person{
+		Id:   1,
+		Name: "乔峰",
+		Age:  35,
+		Sex:  "男",
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(sql, args)
+	fmt.Println("")
+
+	// 使用结构体构建插入sql，占位符
+	sql, args, err = From("person3").As("a").BuildSPCreate(&[]Person{
+		{Id: 1, Name: "孙悟空", Age: 23},
+		{Id: 2, Name: "唐僧", Age: 25},
+		{Id: 3, Name: "猪八戒", Age: 27},
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(sql, args)
+	fmt.Println("")
+
+	// 反射生成更新sql语句
+	sql, args, err = From("person").As("a").WhereAnd("id", 11).BuildSPUpdate(&p1)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(sql, args)
 }

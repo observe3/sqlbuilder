@@ -454,28 +454,45 @@ func (b *sqlBuilder) BuildSelect() (string, []interface{}) {
  * 使用map构建插入sql
  * 命名参数
 **/
-func (b *sqlBuilder) BuildCreate(option map[string]interface{}) (string, map[string]interface{}) {
-	var keys, vals string
+func (b *sqlBuilder) BuildMNCreate(option map[string]interface{}) (string, map[string]interface{}) {
+	keysArr := []string{}
+	valsArr := []string{}
 	for k := range option {
-		keys = fmt.Sprintf("%s,`%s`", keys, k)
-		vals = fmt.Sprintf("%s,:%s", vals, k)
+		keysArr = append(keysArr, fmt.Sprintf("`%s`", k))
+		valsArr = append(valsArr, fmt.Sprintf(":%s", k))
 	}
-	keys = strings.TrimLeft(keys, ",")
-	vals = strings.TrimLeft(vals, ",")
-	return fmt.Sprintf("insert into `%s` (%s) values(%s)", b.tableName, keys, vals), option
+	sqlStr := fmt.Sprintf("insert into `%s` (%s) values (%s)", b.tableName, strings.Join(keysArr, ","), strings.Join(valsArr, ","))
+	return sqlStr, option
 }
 
 /**
  * 使用map构建插入sql
  * 占位符
 **/
-func (b *sqlBuilder) BuildPCreate(option *[]map[string]interface{}) (string, []any) {
+func (b *sqlBuilder) BuildMPCreate(option map[string]interface{}) (string, []interface{}) {
+	keysArr := []string{}
+	valsArr := []interface{}{}
+	placeArr := []string{}
+	for k, v := range option {
+		keysArr = append(keysArr, fmt.Sprintf("`%s`", k))
+		valsArr = append(valsArr, v)
+		placeArr = append(placeArr, "?")
+	}
+	sqlStr := fmt.Sprintf("insert into `%s` (%s) values (%s)", b.tableName, strings.Join(keysArr, ","), strings.Join(placeArr, ","))
+	return sqlStr, valsArr
+}
+
+/**
+ * 使用切片 map构建批量插入sql
+ * 占位符
+**/
+func (b *sqlBuilder) BuildSMPCreate(option []map[string]interface{}) (string, []any) {
 	var (
 		fieldValue  []any
 		keysArr     []string
 		sqlValueArr []string
 	)
-	for k, v := range *option {
+	for k, v := range option {
 		placeholderArr := []string{}
 		for kk, vv := range v {
 			if k == 0 {
@@ -492,10 +509,28 @@ func (b *sqlBuilder) BuildPCreate(option *[]map[string]interface{}) (string, []a
 }
 
 /**
+ * 使用切片 map构建批量插入sql
+ * 命名参数
+**/
+func (b *sqlBuilder) BuildSMNCreate(option []map[string]interface{}) (string, []map[string]interface{}) {
+	keysArr := []string{}
+	valsArr := []string{}
+	if len(option) == 0 {
+		return "", nil
+	}
+	for k := range option[0] {
+		keysArr = append(keysArr, fmt.Sprintf("`%s`", k))
+		valsArr = append(valsArr, fmt.Sprintf(":%s", k))
+	}
+	sqlStr := fmt.Sprintf("insert into `%s` (%s) values (%s)", b.tableName, strings.Join(keysArr, ","), strings.Join(valsArr, ","))
+	return sqlStr, option
+}
+
+/**
  * 使用结构体构建插入sql
  * 命名参数
 **/
-func (b *sqlBuilder) BuildSCreate(entity any) (string, error) {
+func (b *sqlBuilder) BuildENCreate(entity any) (string, error) {
 	if b.dbTag == "" {
 		b.dbTag = "db"
 	}
@@ -509,10 +544,8 @@ func (b *sqlBuilder) BuildSCreate(entity any) (string, error) {
 	}
 	typ := elemVal.Type()
 
-	var (
-		fields    []string
-		nameField []string
-	)
+	fields := []string{}
+	nameField := []string{}
 	for i := 0; i < elemVal.NumField(); i++ {
 		field := typ.Field(i)
 		dbTag := field.Tag.Get(b.dbTag)
@@ -537,7 +570,50 @@ func (b *sqlBuilder) BuildSCreate(entity any) (string, error) {
  * 使用结构体构建插入sql
  * 占位符
 **/
-func (b *sqlBuilder) BuildSPCreate(entity any) (string, []any, error) {
+func (b *sqlBuilder) BuildEPCreate(entity any) (string, []any, error) {
+	if b.dbTag == "" {
+		b.dbTag = "db"
+	}
+	reflectValue := reflect.ValueOf(entity)
+	if reflectValue.Kind() != reflect.Ptr || reflectValue.IsNil() {
+		return "", nil, errors.New("参数不是指针类型")
+	}
+	elemVal := reflectValue.Elem()
+	if elemVal.Kind() != reflect.Struct {
+		return "", nil, errors.New("参数不是结构体类型")
+	}
+	typ := elemVal.Type()
+
+	fields := []string{}
+	valsArr := []interface{}{}
+	fieldLen := 0
+	for i := 0; i < elemVal.NumField(); i++ {
+		field := typ.Field(i)
+		dbTag := field.Tag.Get(b.dbTag)
+		if dbTag == "" || dbTag == "-" {
+			continue
+		}
+		fieldVal := elemVal.Field(i)
+		if !fieldVal.CanInterface() {
+			continue
+		}
+		fields = append(fields, fmt.Sprintf("`%s`", dbTag))
+		valsArr = append(valsArr, fieldVal.Interface())
+		fieldLen += 1
+	}
+	placeHolder := strings.TrimRight(strings.Repeat("?,", fieldLen), ",")
+	// 构建 SQL 语句
+	if len(fields) == 0 {
+		return "", nil, errors.New("没有可插入的字段")
+	}
+	return fmt.Sprintf("insert into `%s` (%s) values(%s)", b.tableName, strings.Join(fields, ","), placeHolder), valsArr, nil
+}
+
+/**
+ * 使用结构体切片构建插入sql
+ * 占位符
+**/
+func (b *sqlBuilder) BuildSEPCreate(entity any) (string, []any, error) {
 	if b.dbTag == "" {
 		b.dbTag = "db"
 	}
@@ -592,10 +668,66 @@ func (b *sqlBuilder) BuildSPCreate(entity any) (string, []any, error) {
 }
 
 /**
+ * 使用结构体切片构建插入sql
+ * 命名参数
+**/
+func (b *sqlBuilder) BuildSENCreate(entity any) (string, error) {
+	if b.dbTag == "" {
+		b.dbTag = "db"
+	}
+	reflectVal := reflect.ValueOf(entity)
+	if reflectVal.Kind() != reflect.Ptr || reflectVal.IsNil() {
+		return "", errors.New("参数不是指针类型")
+	}
+	elemVal := reflectVal.Elem()
+
+	if elemVal.Kind() != reflect.Slice {
+		return "", errors.New("参数不是指针切片类型")
+	}
+
+	keysArr := []string{}
+	sliceLenth := elemVal.Len()
+	var firstItem reflect.Value
+	if sliceLenth == 0 {
+		return "", errors.New("切片为空")
+	} else {
+		firstItem = elemVal.Index(0)
+	}
+	for i := 0; i < sliceLenth; i++ {
+		item := elemVal.Index(i)
+		if item.Kind() != reflect.Struct {
+			return "", errors.New("切片中的元素不是结构体类型")
+		}
+	}
+	placeholderArr := []string{}
+	itemType := firstItem.Type()
+	for j := 0; j < firstItem.NumField(); j++ {
+		field := itemType.Field(j)
+		dbTag := field.Tag.Get(b.dbTag)
+		if dbTag == "" || dbTag == "-" {
+			continue
+		}
+		fieldVal := firstItem.Field(j)
+		if !fieldVal.CanInterface() {
+			continue
+		}
+		keysArr = append(keysArr, fmt.Sprintf("`%s`", dbTag))
+		placeholderArr = append(placeholderArr, fmt.Sprintf(":%s", dbTag))
+	}
+	if len(keysArr) == 0 {
+		return "", errors.New("没有可插入的字段")
+	}
+	namedStr := fmt.Sprintf("(%s)", strings.Join(placeholderArr, ","))
+	insertSql := fmt.Sprintf("insert into `%s` (%s) values %s", b.tableName, strings.Join(keysArr, ","), namedStr)
+
+	return insertSql, nil
+}
+
+/**
  * 使用map构建更新sql
  * 占位符
 **/
-func (b *sqlBuilder) BuildPUpdate(option map[string]interface{}) (string, []interface{}) {
+func (b *sqlBuilder) BuildMPUpdate(option map[string]interface{}) (string, []interface{}) {
 	var vals string
 	tableName := b.tableName
 	if b.alias != "" {
@@ -635,7 +767,7 @@ func (b *sqlBuilder) BuildPUpdate(option map[string]interface{}) (string, []inte
 * 使用结构体构建更新sql
 * 占位符
  */
-func (b *sqlBuilder) BuildSPUpdate(entity any) (string, []any, error) {
+func (b *sqlBuilder) BuildEPUpdate(entity any) (string, []any, error) {
 	if b.dbTag == "" {
 		b.dbTag = "db"
 	}
@@ -773,13 +905,12 @@ func (b *sqlBuilder) BuildDelete() (string, []interface{}) {
 	if whStr == "" {
 		return "", nil
 	}
-	if whStr != "" {
-		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
-	} else {
-		panic("必须有一个条件")
+	if whStr == "" || len(whArgs) == 0 {
+		panic("条件不能为空")
 	}
-	if len(whArgs) > 0 {
-		b.fieldValue = append(b.fieldValue, whArgs...)
-	}
+	b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
+
+	b.fieldValue = append(b.fieldValue, whArgs...)
+
 	return b.SqlStr, b.fieldValue
 }

@@ -542,11 +542,24 @@ func (b *sqlBuilder) BuildENCreate(entity any) (string, error) {
 	if elemVal.Kind() != reflect.Struct {
 		return "", errors.New("参数不是结构体类型")
 	}
-	typ := elemVal.Type()
-
 	fields := []string{}
-	nameField := []string{}
+	nameFields := []string{}
+
+	b.recursionENEmbed(elemVal, &fields, &nameFields)
+
+	// 构建 SQL 语句
+	if len(fields) == 0 {
+		return "", errors.New("没有可插入的字段")
+	}
+	return fmt.Sprintf("insert into `%s` (%s) values(%s)", b.tableName, strings.Join(fields, ","), strings.Join(nameFields, ",")), nil
+}
+
+func (b *sqlBuilder) recursionENEmbed(elemVal reflect.Value, fields *[]string, nameFields *[]string) {
+	typ := elemVal.Type()
 	for i := 0; i < elemVal.NumField(); i++ {
+		if typ.Field(i).Anonymous && typ.Field(i).Type.Kind() == reflect.Struct {
+			b.recursionENEmbed(elemVal.Field(i), fields, nameFields)
+		}
 		field := typ.Field(i)
 		dbTag := field.Tag.Get(b.dbTag)
 		if dbTag == "" || dbTag == "-" {
@@ -556,14 +569,9 @@ func (b *sqlBuilder) BuildENCreate(entity any) (string, error) {
 		if !fieldVal.CanInterface() {
 			continue
 		}
-		fields = append(fields, fmt.Sprintf("`%s`", dbTag))
-		nameField = append(nameField, fmt.Sprintf(":%s", dbTag))
+		*fields = append(*fields, fmt.Sprintf("`%s`", dbTag))
+		*nameFields = append(*nameFields, fmt.Sprintf(":%s", dbTag))
 	}
-	// 构建 SQL 语句
-	if len(fields) == 0 {
-		return "", errors.New("没有可插入的字段")
-	}
-	return fmt.Sprintf("insert into `%s` (%s) values(%s)", b.tableName, strings.Join(fields, ","), strings.Join(nameField, ",")), nil
 }
 
 /**
@@ -582,12 +590,26 @@ func (b *sqlBuilder) BuildEPCreate(entity any) (string, []any, error) {
 	if elemVal.Kind() != reflect.Struct {
 		return "", nil, errors.New("参数不是结构体类型")
 	}
-	typ := elemVal.Type()
 
 	fields := []string{}
 	valsArr := []interface{}{}
 	fieldLen := 0
+	b.recursionEPEmbed(elemVal, &fields, &valsArr, &fieldLen)
+
+	placeHolder := strings.TrimRight(strings.Repeat("?,", fieldLen), ",")
+	// 构建 SQL 语句
+	if len(fields) == 0 {
+		return "", nil, errors.New("没有可插入的字段")
+	}
+	return fmt.Sprintf("insert into `%s` (%s) values(%s)", b.tableName, strings.Join(fields, ","), placeHolder), valsArr, nil
+}
+
+func (b *sqlBuilder) recursionEPEmbed(elemVal reflect.Value, fields *[]string, valsArr *[]any, fieldLen *int) {
+	typ := elemVal.Type()
 	for i := 0; i < elemVal.NumField(); i++ {
+		if typ.Field(i).Anonymous && typ.Field(i).Type.Kind() == reflect.Struct {
+			b.recursionEPEmbed(elemVal.Field(i), fields, valsArr, fieldLen)
+		}
 		field := typ.Field(i)
 		dbTag := field.Tag.Get(b.dbTag)
 		if dbTag == "" || dbTag == "-" {
@@ -597,16 +619,10 @@ func (b *sqlBuilder) BuildEPCreate(entity any) (string, []any, error) {
 		if !fieldVal.CanInterface() {
 			continue
 		}
-		fields = append(fields, fmt.Sprintf("`%s`", dbTag))
-		valsArr = append(valsArr, fieldVal.Interface())
-		fieldLen += 1
+		*fields = append(*fields, fmt.Sprintf("`%s`", dbTag))
+		*valsArr = append(*valsArr, fieldVal.Interface())
+		*fieldLen += 1
 	}
-	placeHolder := strings.TrimRight(strings.Repeat("?,", fieldLen), ",")
-	// 构建 SQL 语句
-	if len(fields) == 0 {
-		return "", nil, errors.New("没有可插入的字段")
-	}
-	return fmt.Sprintf("insert into `%s` (%s) values(%s)", b.tableName, strings.Join(fields, ","), placeHolder), valsArr, nil
 }
 
 /**
@@ -639,23 +655,9 @@ func (b *sqlBuilder) BuildSEPCreate(entity any) (string, []any, error) {
 		}
 
 		placeholderArr := []string{}
-		itemType := item.Type()
-		for j := 0; j < item.NumField(); j++ {
-			field := itemType.Field(j)
-			dbTag := field.Tag.Get(b.dbTag)
-			if dbTag == "" || dbTag == "-" {
-				continue
-			}
-			fieldVal := item.Field(j)
-			if !fieldVal.CanInterface() {
-				continue
-			}
-			if i == 0 {
-				keysArr = append(keysArr, fmt.Sprintf("`%s`", dbTag))
-			}
-			fieldValueArr = append(fieldValueArr, fieldVal.Interface())
-			placeholderArr = append(placeholderArr, "?")
-		}
+		// itemType := item.Type()
+		b.recursionSEPEmbed(item, i, &keysArr, &fieldValueArr, &placeholderArr)
+
 		sqlValueArr = append(sqlValueArr, fmt.Sprintf("(%s)", strings.Join(placeholderArr, ",")))
 
 	}
@@ -665,6 +667,29 @@ func (b *sqlBuilder) BuildSEPCreate(entity any) (string, []any, error) {
 	insertSql := fmt.Sprintf("insert into `%s` (%s) values %s", b.tableName, strings.Join(keysArr, ","), strings.Join(sqlValueArr, ","))
 
 	return insertSql, fieldValueArr, nil
+}
+
+func (b *sqlBuilder) recursionSEPEmbed(elemVal reflect.Value, i int, keysArr *[]string, fieldValueArr *[]any, placeholderArr *[]string) {
+	itemType := elemVal.Type()
+	for j := 0; j < elemVal.NumField(); j++ {
+		if itemType.Field(j).Anonymous && itemType.Field(j).Type.Kind() == reflect.Struct {
+			b.recursionSEPEmbed(elemVal.Field(j), i, keysArr, fieldValueArr, placeholderArr)
+		}
+		field := itemType.Field(j)
+		dbTag := field.Tag.Get(b.dbTag)
+		if dbTag == "" || dbTag == "-" {
+			continue
+		}
+		fieldVal := elemVal.Field(j)
+		if !fieldVal.CanInterface() {
+			continue
+		}
+		if i == 0 {
+			*keysArr = append(*keysArr, fmt.Sprintf("`%s`", dbTag))
+		}
+		*fieldValueArr = append(*fieldValueArr, fieldVal.Interface())
+		*placeholderArr = append(*placeholderArr, "?")
+	}
 }
 
 /**
@@ -700,8 +725,23 @@ func (b *sqlBuilder) BuildSENCreate(entity any) (string, error) {
 		}
 	}
 	placeholderArr := []string{}
+	b.recursionSENEmbed(firstItem, &keysArr, &placeholderArr)
+
+	if len(keysArr) == 0 {
+		return "", errors.New("没有可插入的字段")
+	}
+	namedStr := fmt.Sprintf("(%s)", strings.Join(placeholderArr, ","))
+	insertSql := fmt.Sprintf("insert into `%s` (%s) values %s", b.tableName, strings.Join(keysArr, ","), namedStr)
+
+	return insertSql, nil
+}
+
+func (b *sqlBuilder) recursionSENEmbed(firstItem reflect.Value, keysArr *[]string, placeholderArr *[]string) {
 	itemType := firstItem.Type()
 	for j := 0; j < firstItem.NumField(); j++ {
+		if itemType.Field(j).Anonymous && itemType.Field(j).Type.Kind() == reflect.Struct {
+			b.recursionSENEmbed(firstItem.Field(j), keysArr, placeholderArr)
+		}
 		field := itemType.Field(j)
 		dbTag := field.Tag.Get(b.dbTag)
 		if dbTag == "" || dbTag == "-" {
@@ -711,16 +751,9 @@ func (b *sqlBuilder) BuildSENCreate(entity any) (string, error) {
 		if !fieldVal.CanInterface() {
 			continue
 		}
-		keysArr = append(keysArr, fmt.Sprintf("`%s`", dbTag))
-		placeholderArr = append(placeholderArr, fmt.Sprintf(":%s", dbTag))
+		*keysArr = append(*keysArr, fmt.Sprintf("`%s`", dbTag))
+		*placeholderArr = append(*placeholderArr, fmt.Sprintf(":%s", dbTag))
 	}
-	if len(keysArr) == 0 {
-		return "", errors.New("没有可插入的字段")
-	}
-	namedStr := fmt.Sprintf("(%s)", strings.Join(placeholderArr, ","))
-	insertSql := fmt.Sprintf("insert into `%s` (%s) values %s", b.tableName, strings.Join(keysArr, ","), namedStr)
-
-	return insertSql, nil
 }
 
 /**
@@ -780,11 +813,34 @@ func (b *sqlBuilder) BuildEPUpdate(entity any) (string, []any, error) {
 		return "", nil, errors.New("需要传入结构体指针")
 	}
 	reflectVal = reflectVal.Elem()
-	typElem := reflectVal.Type()
 
-	setStr := ""
-	for i := 0; i < reflectVal.NumField(); i++ {
+	var setStr string
+	var fieldArr []string
+	b.recursionEmbedStruct(reflectVal, &fieldArr, tableName)
+
+	setStr = strings.Join(fieldArr, ",")
+	b.SqlStr = fmt.Sprintf("update `%s` as `%s` set %s", b.tableName, tableName, setStr)
+
+	whStr, whArgs := b.jwhere.ParseWhere()
+	if whStr != "" {
+		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
+	} else {
+		panic("必须有一个条件")
+	}
+	if len(whArgs) > 0 {
+		b.fieldValue = append(b.fieldValue, whArgs...)
+	}
+	return b.SqlStr, b.fieldValue, nil
+}
+
+func (b *sqlBuilder) recursionEmbedStruct(reflectVal reflect.Value, fieldArr *[]string, tableName string) error {
+	numFields := reflectVal.NumField()
+	typElem := reflectVal.Type()
+	for i := 0; i < numFields; i++ {
 		field := typElem.Field(i)
+		if field.Anonymous && field.Type.Kind() == reflect.Struct {
+			b.recursionEmbedStruct(reflectVal.Field(i), fieldArr, tableName)
+		}
 		dbField := field.Tag.Get(b.dbTag)
 		if dbField == "" || dbField == "-" {
 			continue
@@ -812,29 +868,18 @@ func (b *sqlBuilder) BuildEPUpdate(entity any) (string, []any, error) {
 		switch tval := fial.(type) {
 		case string:
 			b.fieldValue = append(b.fieldValue, tval)
-			setStr = fmt.Sprintf("%s,`%s`.`%s` = ?", setStr, tableName, dbField)
+			*fieldArr = append(*fieldArr, fmt.Sprintf("`%s`.`%s` = ?", tableName, dbField))
 		case int, int8, int32, int16, int64, uint, uint8, uint16, uint32, uint64,
 			float32, float64:
 			b.fieldValue = append(b.fieldValue, tval)
-			setStr = fmt.Sprintf("%s,`%s`.`%s` = ?", setStr, tableName, dbField)
+			*fieldArr = append(*fieldArr, fmt.Sprintf("`%s`.`%s` = ?", tableName, dbField))
 		case []any:
 			b.fieldValue = append(b.fieldValue, tval[2])
-			setStr = fmt.Sprintf("%s,`%s`.`%s` = `%s`.`%s`%s?", setStr, tableName, dbField, tableName, tval[0], tval[1])
+			*fieldArr = append(*fieldArr, fmt.Sprintf("`%s`.`%s` = `%s`.`%s`%s?", tableName, dbField, tableName, tval[0], tval[1]))
 		}
-	}
-	setStr = strings.TrimLeft(setStr, ",")
-	b.SqlStr = fmt.Sprintf("update `%s` as `%s` set %s", b.tableName, tableName, setStr)
 
-	whStr, whArgs := b.jwhere.ParseWhere()
-	if whStr != "" {
-		b.SqlStr = fmt.Sprintf("%s where %s", b.SqlStr, whStr)
-	} else {
-		panic("必须有一个条件")
 	}
-	if len(whArgs) > 0 {
-		b.fieldValue = append(b.fieldValue, whArgs...)
-	}
-	return b.SqlStr, b.fieldValue, nil
+	return nil
 }
 
 /**

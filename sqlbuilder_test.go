@@ -11,6 +11,15 @@ type Person struct {
 	Age          int    `db:"age"`
 	Sex          string `db:"sex"`
 	DepartmentId int    `db:"department_id"`
+	Speak
+}
+
+type Speak struct {
+	Act string `db:"act"`
+	Walk
+}
+type Walk struct {
+	Step string `db:"step"`
 }
 
 func (Person) TableName() string {
@@ -34,6 +43,7 @@ func (Person) GetAgeField() string {
 
 func TestSqlBuilder(t *testing.T) {
 	var err error
+
 	p1 := Person{
 		Id:           1,
 		Name:         "张三",
@@ -214,7 +224,10 @@ func TestSqlBuilder(t *testing.T) {
 	fmt.Println("")
 
 	// 使用结构体构建插入sql，占位符
-	sql, args, err = From("produt777").BuildEPCreate(&p1)
+	sql, args, err = From("produt777").BuildEPCreate(&Person{
+		Id:   1,
+		Name: "张三",
+	})
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -222,7 +235,7 @@ func TestSqlBuilder(t *testing.T) {
 	fmt.Println("")
 
 	// 使用结构体构建插入sql，命名参数
-	sql, err = From("person2").As("a").BuildENCreate(&Person{
+	sql, err = From("person286543987").As("a").BuildENCreate(&Person{
 		Id:   1,
 		Name: "乔峰",
 		Age:  35,
@@ -235,10 +248,10 @@ func TestSqlBuilder(t *testing.T) {
 	fmt.Println("")
 
 	// 使用结构体构建插入sql，占位符
-	sql, args, err = From("person3333").As("a").BuildSEPCreate(&[]Person{
+	sql, args, err = From("person3333333333333").As("a").BuildSEPCreate(&[]Person{
 		{Id: 1, Name: "孙悟空", Age: 23},
 		{Id: 2, Name: "唐僧", Age: 25},
-		{Id: 3, Name: "猪八戒", Age: 27},
+		{Id: 3, Name: "猪八戒", Age: 27, Speak: Speak{Act: "attack", Walk: Walk{Step: "walk"}}},
 	})
 	if err != nil {
 		fmt.Println(err)
@@ -259,7 +272,22 @@ func TestSqlBuilder(t *testing.T) {
 	fmt.Println("")
 
 	// 反射生成更新sql语句
-	sql, args, err = From("person876").As("a").WhereAnd("id", 11).BuildEPUpdate(&p1)
+	p100 := Person{
+		Id:           1,
+		Name:         "张三",
+		Age:          18,
+		Sex:          "男",
+		DepartmentId: 1,
+		Speak: Speak{
+			// Id:  333,
+			Act: "attack",
+			Walk: Walk{
+				// Id:   444,
+				Step: "walk",
+			},
+		},
+	}
+	sql, args, err = From("person876").As("a").WhereAnd("id", 11).BuildEPUpdate(&p100)
 	if err != nil {
 		fmt.Println(err)
 	}

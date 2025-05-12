@@ -169,12 +169,14 @@ func TestSqlBuilder(t *testing.T) {
 	fmt.Println("")
 
 	// having
-	sql, args = From("produt").As("a").
+	sql, args = From("produt987654321").As("a").
 		Select("classify_id", Fn("SUM", "total_sum", "bill_sum")).
 		WhereAnd("id", 2).
 		Group("classify_id").
 		WhereAnd([][]any{
 			{Literal("`a`.`in_num`+`a`.`a_num`"), "<", Literal("num+sum")},
+			{Literal("DATE_FORMAT(date, '%Y-%m')"), 23},
+			// {Fn("DATE_FORMAT", "", "date", "'%Y-%m'"), 24},
 		}).
 		HavingWhereAnd([][]interface{}{
 			{"id", "=", 23},
@@ -292,4 +294,18 @@ func TestSqlBuilder(t *testing.T) {
 		fmt.Println(err)
 	}
 	fmt.Println(sql, args)
+	fmt.Println("")
+
+	// having
+	sql, args = From("pa_category").As("a").
+		Select("id").
+		WhereAnd("id", 2).
+		WhereAnd([][]any{
+			{Literal("`a`.`in_num`+`a`.`a_num`"), "<", Literal("num+sum")},
+			{Literal("DATE_FORMAT(date, 'eee')"), 23},
+			{Fn("DATE_FORMAT", "", "year_date", "'%Y-%m'"), 24},
+		}).
+		BuildSelect()
+	fmt.Println(sql, args)
+	fmt.Println("")
 }

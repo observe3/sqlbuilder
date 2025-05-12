@@ -220,7 +220,7 @@ func parseAggregation(args ...interface{}) (string, int64) {
 	case string:
 		nfield = args[0].(string)
 		ftype = 1
-	case *colCarrier:
+	case *funCarrier:
 		val := args[0].(*funCarrier)
 		if val.Fn != "" {
 			var fnp string

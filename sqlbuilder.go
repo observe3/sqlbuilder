@@ -569,6 +569,9 @@ func (b *sqlBuilder) recursionENEmbed(elemVal reflect.Value, fields *[]string, n
 		if !fieldVal.CanInterface() {
 			continue
 		}
+		if ok := b.hjump(fieldVal, dbTag); ok {
+			continue
+		}
 		*fields = append(*fields, fmt.Sprintf("`%s`", dbTag))
 		*nameFields = append(*nameFields, fmt.Sprintf(":%s", dbTag))
 	}
@@ -619,6 +622,10 @@ func (b *sqlBuilder) recursionEPEmbed(elemVal reflect.Value, fields *[]string, v
 		if !fieldVal.CanInterface() {
 			continue
 		}
+		if ok := b.hjump(fieldVal, dbTag); ok {
+			continue
+		}
+
 		*fields = append(*fields, fmt.Sprintf("`%s`", dbTag))
 		*valsArr = append(*valsArr, fieldVal.Interface())
 		*fieldLen += 1
@@ -682,6 +689,9 @@ func (b *sqlBuilder) recursionSEPEmbed(elemVal reflect.Value, i int, keysArr *[]
 		}
 		fieldVal := elemVal.Field(j)
 		if !fieldVal.CanInterface() {
+			continue
+		}
+		if ok := b.hjump(fieldVal, dbTag); ok {
 			continue
 		}
 		if i == 0 {
@@ -749,6 +759,9 @@ func (b *sqlBuilder) recursionSENEmbed(firstItem reflect.Value, keysArr *[]strin
 		}
 		fieldVal := firstItem.Field(j)
 		if !fieldVal.CanInterface() {
+			continue
+		}
+		if ok := b.hjump(fieldVal, dbTag); ok {
 			continue
 		}
 		*keysArr = append(*keysArr, fmt.Sprintf("`%s`", dbTag))
@@ -849,22 +862,10 @@ func (b *sqlBuilder) recursionEmbedStruct(reflectVal reflect.Value, fieldArr *[]
 		if !fieldVal.CanInterface() {
 			continue
 		}
-		fial := fieldVal.Interface()
-		jump := false
-		if fial == nil || fial == "" || fial == 0 {
-			jump = true
-		}
-		// 等于0仍要更新
-		if _, ok := b.zeroFieldMap[dbField]; ok {
-			jump = false
-		}
-		// 等于空仍要更新
-		if _, ok := b.emptyFieldMap[dbField]; ok {
-			jump = false
-		}
-		if jump {
+		if ok := b.hjump(fieldVal, dbField); ok {
 			continue
 		}
+		fial := fieldVal.Interface()
 		switch tval := fial.(type) {
 		case string:
 			b.fieldValue = append(b.fieldValue, tval)
@@ -958,4 +959,24 @@ func (b *sqlBuilder) BuildDelete() (string, []interface{}) {
 	b.fieldValue = append(b.fieldValue, whArgs...)
 
 	return b.SqlStr, b.fieldValue
+}
+
+func (b *sqlBuilder) hjump(val reflect.Value, dbField string) bool {
+	fial := val.Interface()
+	if fial == nil {
+		return true
+	}
+	jump := false
+	if fial == "" || fial == 0 {
+		jump = true
+	}
+	// 等于0仍要更新
+	if _, ok := b.zeroFieldMap[dbField]; ok {
+		jump = false
+	}
+	// 等于空仍要更新
+	if _, ok := b.emptyFieldMap[dbField]; ok {
+		jump = false
+	}
+	return jump
 }

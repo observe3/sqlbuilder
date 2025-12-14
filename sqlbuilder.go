@@ -962,13 +962,23 @@ func (b *sqlBuilder) BuildDelete() (string, []interface{}) {
 }
 
 func (b *sqlBuilder) hjump(val reflect.Value, dbField string) bool {
-	fial := val.Interface()
-	if fial == nil {
+	// 1. 指针类型且为 nil -> 跳过
+	if val.Kind() == reflect.Ptr && val.IsNil() {
 		return true
 	}
 	jump := false
-	if fial == "" || fial == 0 {
-		jump = true
+	switch val.Kind() {
+	case reflect.String:
+		jump = val.String() == ""
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		jump = val.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		jump = val.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		jump = val.Float() == 0
+	default:
+		// 其他类型默认不跳
+		jump = false
 	}
 	// 等于0仍要更新
 	if _, ok := b.zeroFieldMap[dbField]; ok {

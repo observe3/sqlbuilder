@@ -16,7 +16,7 @@ type Condition struct {
 	Condition string
 
 	// 值
-	Value interface{}
+	Value any
 
 	// 表
 	TableName string
@@ -41,13 +41,11 @@ type Where struct {
 
 	// 表的别名
 	alias string
-
-	ogroup bool // 是否用了分组
 }
 
 // 实现where接口
-func (r *Where) ParseWhere() (string, []interface{}) {
-	var fieldValue []interface{}
+func (r *Where) ParseWhere() (string, []any) {
+	var fieldValue []any
 	var whStr strings.Builder
 	for _, bigGroup := range r.assembleWhere {
 		for j, v := range bigGroup {
@@ -58,9 +56,11 @@ func (r *Where) ParseWhere() (string, []interface{}) {
 				}
 				if w.TableName != "" {
 					tableName = w.TableName
+				} else {
+					w.TableName = tableName
 				}
-				operater, placeholder, result := r.parseOperater(w)
-				if operater == "" || placeholder == "" {
+				operator, placeholder, result := r.parseOperator(w)
+				if operator == "" {
 					continue
 				}
 				fieldValue = append(fieldValue, result...)
@@ -85,10 +85,13 @@ func (r *Where) ParseWhere() (string, []interface{}) {
 				}
 				// normal field
 				if w.FieldType == 1 {
-					whStr.WriteString(joinStr + "`" + tableName + "`.`" + w.Field + "` " + operater + " " + placeholder)
+					whStr.WriteString(joinStr + "`" + tableName + "`.`" + w.Field + "` " + operator + " " + placeholder)
 				} else if w.FieldType == 2 {
 					// special
-					whStr.WriteString(joinStr + w.Field + " " + operater + " " + placeholder)
+					whStr.WriteString(joinStr + w.Field + " " + operator + " " + placeholder)
+				} else if w.FieldType == 3 {
+					// bare operator (EXISTS, etc.) — no field prefix
+					whStr.WriteString(joinStr + operator + " " + placeholder)
 				}
 				if len(v.Condition) > 1 && k == len(v.Condition)-1 {
 					whStr.WriteString(" )")
@@ -122,11 +125,7 @@ func (r *Where) SetAlias(alias string) {
 	r.alias = alias
 }
 
-func (r *Where) SetGroup() {
-	r.ogroup = true
-}
-
-func (r *Where) parseOperater(w Condition) (string, string, []interface{}) {
+func (r *Where) parseOperator(w Condition) (string, string, []any) {
 	if val, ok := symbolMap[strings.ToLower(w.Condition)]; ok {
 		return val.Operate(w)
 	}

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git mv *)",
+      "Bash(go build *)",
+      "Bash(go test *)",
+      "Bash(go vet *)",
+      "Bash(staticcheck ./...)",
+      "Bash(pkill gopls *)",
+      "Bash(git -C /Users/karon/sqlbuilder status --short)",
+      "Bash(python3 *)"
+    ]
+  }
+}

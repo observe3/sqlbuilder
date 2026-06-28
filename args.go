@@ -6,7 +6,7 @@ import (
 )
 
 type IArgser interface {
-	ParseArgs(relation string, args ...interface{}) []GroupWhere
+	ParseArgs(relation string, args ...any) []GroupWhere
 }
 
 var argsMap map[int]IArgser
@@ -30,15 +30,18 @@ func RegisterArgsHandle(n int, obj IArgser) {
 type oneArgs struct {
 }
 
-func (r *oneArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
+func (r *oneArgs) ParseArgs(relation string, args ...any) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
 	switch whs := args[0].(type) {
-	case [][]interface{}:
+	case [][]any:
 		andWh := []Condition{}
 
 		for _, v := range whs {
 			if v[0] == "" {
-				continue
+				_, isSub := v[len(v)-1].(*sqlBuilder)
+				if !isSub {
+					continue
+				}
 			}
 			groupCondition(&andWh, v)
 
@@ -47,14 +50,17 @@ func (r *oneArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 			Condition: andWh,
 			Relation:  relation,
 		})
-	case [][][]interface{}:
+	case [][][]any:
 		// 遍历每一组条件
 		for _, v := range whs {
 			var gwh []Condition
 			for _, vv := range v {
-				if vv[0] == "" {
-					continue
-				}
+					if vv[0] == "" {
+						_, isSub := vv[len(vv)-1].(*sqlBuilder)
+						if !isSub {
+							continue
+						}
+					}
 				groupCondition(&gwh, vv)
 			}
 			groupWhere = append(groupWhere, GroupWhere{
@@ -65,10 +71,10 @@ func (r *oneArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 	}
 	return groupWhere
 }
-func groupCondition(andWh *[]Condition, v []interface{}) string {
+func groupCondition(andWh *[]Condition, v []any) string {
 	var relation string
 	nfield, ftype := parseAggregation(v...)
-	if nfield == "" {
+	if nfield == "" && ftype == 0 {
 		return ""
 	}
 	switch len(v) {
@@ -111,10 +117,10 @@ func groupCondition(andWh *[]Condition, v []interface{}) string {
 type twoArgs struct {
 }
 
-func (r *twoArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
+func (r *twoArgs) ParseArgs(relation string, args ...any) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
 	nfield, ftype := parseAggregation(args...)
-	if nfield == "" {
+	if nfield == "" && ftype == 0 {
 		return groupWhere
 	}
 	groupWhere = append(groupWhere, GroupWhere{
@@ -134,10 +140,10 @@ func (r *twoArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
 type threeArgs struct {
 }
 
-func (r *threeArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
+func (r *threeArgs) ParseArgs(relation string, args ...any) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
 	nfield, ftype := parseAggregation(args...)
-	if nfield == "" {
+	if nfield == "" && ftype == 0 {
 		return groupWhere
 	}
 	groupWhere = append(groupWhere, GroupWhere{
@@ -157,10 +163,10 @@ func (r *threeArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere
 type fourArgs struct {
 }
 
-func (r *fourArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
+func (r *fourArgs) ParseArgs(relation string, args ...any) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
 	nfield, ftype := parseAggregation(args...)
-	if nfield == "" {
+	if nfield == "" && ftype == 0 {
 		return groupWhere
 	}
 	groupWhere = append(groupWhere, GroupWhere{
@@ -181,13 +187,13 @@ func (r *fourArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere 
 type fiveArgs struct {
 }
 
-func (r *fiveArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere {
+func (r *fiveArgs) ParseArgs(relation string, args ...any) []GroupWhere {
 	groupWhere := make([]GroupWhere, 0)
 	if val, ok := args[4].(string); ok {
 		relation = val
 	}
 	nfield, ftype := parseAggregation(args...)
-	if nfield == "" {
+	if nfield == "" && ftype == 0 {
 		return groupWhere
 	}
 	groupWhere = append(groupWhere, GroupWhere{
@@ -206,7 +212,7 @@ func (r *fiveArgs) ParseArgs(relation string, args ...interface{}) []GroupWhere 
 	return groupWhere
 }
 
-func parseAggregation(args ...interface{}) (string, int64) {
+func parseAggregation(args ...any) (string, int64) {
 	for _, v := range args {
 		if val, ok := v.(string); ok {
 			if hasIllegalStr(val) {
@@ -219,7 +225,20 @@ func parseAggregation(args ...interface{}) (string, int64) {
 	switch args[0].(type) {
 	case string:
 		nfield = args[0].(string)
-		ftype = 1
+		if nfield == "" {
+			ftype = 3 // bare operator (EXISTS, NOT EXISTS, etc.)
+		} else {
+			ftype = 1
+		}
+		// FIND_IN_SET 和 JSON_EXTRACT 需要 bare operator 模式
+		if len(args) >= 2 {
+			if cond, ok := args[1].(string); ok {
+				lc := strings.ToLower(cond)
+				if lc == FIND_IN_SET || lc == JSON_EXTRACT {
+					ftype = 3
+				}
+			}
+		}
 	case *funCarrier:
 		val := args[0].(*funCarrier)
 		if val.Fn != "" {
@@ -235,6 +254,19 @@ func parseAggregation(args ...interface{}) (string, int64) {
 		val := args[0].(*literalCarrier)
 		nfield = val.OriginVal
 		ftype = 2
+	case *jsonFieldCarrier:
+		val := args[0].(*jsonFieldCarrier)
+		if val.Field != "" {
+			if val.TableAlias != "" {
+				nfield = fmt.Sprintf("`%s`.`%s`%s'%s'", val.TableAlias, val.Field, val.Arrow, val.Path)
+			} else {
+				nfield = fmt.Sprintf("`%s`%s'%s'", val.Field, val.Arrow, val.Path)
+			}
+		}
+		ftype = 2
+	case *sqlBuilder:
+		nfield = ""
+		ftype = 3 // bare operator, used by EXISTS
 	default:
 		nfield = ""
 		ftype = 0

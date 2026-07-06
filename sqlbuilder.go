@@ -234,11 +234,21 @@ func (b *sqlBuilder) Order(order [][]any) *sqlBuilder {
 	return b
 }
 
-// 分组
+// 分组，支持 "field" 或 "table.field" 格式
 func (b *sqlBuilder) Group(groupBy ...string) *sqlBuilder {
-	if !isSafeIdentifierAny(groupBy...) {
-		b.err = fmt.Errorf("非法的分组字段")
-		return b
+	for _, g := range groupBy {
+		if strings.Contains(g, ".") {
+			parts := strings.Split(g, ".")
+			if len(parts) != 2 || !isSafeIdentifierAny(parts...) {
+				b.err = fmt.Errorf("非法的分组字段: %s", g)
+				return b
+			}
+		} else {
+			if !isSafeIdentifier(g) {
+				b.err = fmt.Errorf("非法的分组字段: %s", g)
+				return b
+			}
+		}
 	}
 	b.groupBy = groupBy
 	return b
@@ -826,7 +836,12 @@ func (b *sqlBuilder) buildGroupBy() string {
 		if i > 0 {
 			groupBuilder.WriteByte(',')
 		}
-		groupBuilder.WriteString(fmt.Sprintf("`%s`.`%s`", b.alias, v))
+		if strings.Contains(v, ".") {
+			parts := strings.Split(v, ".")
+			groupBuilder.WriteString(fmt.Sprintf("`%s`.`%s`", parts[0], parts[1]))
+		} else {
+			groupBuilder.WriteString(fmt.Sprintf("`%s`.`%s`", b.alias, v))
+		}
 	}
 	if b.withRollup {
 		groupBuilder.WriteString(" with rollup")

@@ -781,10 +781,17 @@ func (b *sqlBuilder) formatSelectField(v any) (string, error) {
 			return strings.TrimSpace(fmt.Sprintf("`%s` %s", val.Field, val.FieldAlias)), nil
 		}
 	case string:
+		// 通配符 * 不加反引号，否则 MySQL 会把它当成字面列名
+		if val == "*" {
+			return fmt.Sprintf("%s.*", b.alias), nil
+		}
 		if strings.Contains(val, ".") {
 			arr := strings.Split(val, ".")
 			if len(arr) != 2 {
 				return "", errors.New("错误的查询字段格式，期望 'table.field'")
+			}
+			if arr[1] == "*" {
+				return fmt.Sprintf("`%s`.*", arr[0]), nil
 			}
 			return fmt.Sprintf("`%s`.`%s`", arr[0], arr[1]), nil
 		}
